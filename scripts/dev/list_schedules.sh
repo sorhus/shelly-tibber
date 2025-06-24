@@ -26,13 +26,13 @@ cd "$PROJECT_DIR"
 
 # Build Docker image
 echo "🔨 Building Docker image..."
-docker build -f Dockerfile.python -t shelly-nordpool .
+docker build -f Dockerfile.python -t shelly-tibber .
 
 echo "🚀 Running list schedules script..."
 docker run --rm \
   -v "$PROJECT_DIR/output:/app/output" \
   -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
-  shelly-nordpool python3 src/list_schedules.py
+  shelly-tibber python3 src/list_schedules.py
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -9,7 +9,7 @@ echo "🔧 Setting example schedule on Shelly device..."
 echo "Building Docker image to ensure latest code..."
 
 # Build the Docker image
-docker build -f Dockerfile.python -t shelly-nordpool .
+docker build -f Dockerfile.python -t shelly-tibber .
 
 echo "Running the example schedule script..."
 
@@ -17,6 +17,6 @@ echo "Running the example schedule script..."
 docker run --rm \
   -v "$(pwd)/output:/app/output" \
   -v "$(pwd)/config.json:/app/config.json:ro" \
-  shelly-nordpool python3 src/set_example_schedule.py
+  shelly-tibber python3 src/set_example_schedule.py
 
 echo "✅ Example schedule script completed" 

@@ -34,7 +34,7 @@ log "FORCE_RUN mode: $FORCE_RUN"
 
 # Build Docker image to ensure latest code
 log "Building Docker image to ensure latest code..."
-docker build -f Dockerfile.python -t shelly-nordpool . 2>&1 | tee -a "$LOG_FILE"
+docker build -f Dockerfile.python -t shelly-tibber . 2>&1 | tee -a "$LOG_FILE"
 
 # Run the Docker container
 log "Running the scheduler..."
@@ -42,7 +42,7 @@ docker run --rm \
     -e FORCE_RUN="$FORCE_RUN" \
     -v "$PROJECT_DIR/output:/app/output" \
     -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
-    shelly-nordpool \
+    shelly-tibber \
     2>&1 | tee -a "$LOG_FILE"
 
 # Check exit status

@@ -16,12 +16,12 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # Build Docker image if not present
-if ! docker image inspect shelly-nordpool >/dev/null 2>&1; then
+if ! docker image inspect shelly-tibber >/dev/null 2>&1; then
   echo "🔨 Building Docker image..."
-  docker build -f "$PROJECT_DIR/Dockerfile.python" -t shelly-nordpool "$PROJECT_DIR"
+  docker build -f "$PROJECT_DIR/Dockerfile.python" -t shelly-tibber "$PROJECT_DIR"
 fi
 
 echo "🏠 Running get_home_id.py in Docker..."
 docker run --rm \
   -v "$CONFIG_FILE:/app/config.json:ro" \
-  shelly-nordpool python3 src/get_home_id.py 
+  shelly-tibber python3 src/get_home_id.py 

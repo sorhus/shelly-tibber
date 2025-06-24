@@ -1,4 +1,4 @@
-# Shelly Nordpool - Electricity Price Scheduling
+# Shelly Tibber - Electricity Price Scheduling
 
 Automatically schedule your Shelly Pro 1 switch to turn on during the cheapest electricity hours using Tibber API data.
 
@@ -61,11 +61,11 @@ Automatically schedule your Shelly Pro 1 switch to turn on during the cheapest e
 ./scripts/run_daily.sh
 
 # Or manually with Docker
-docker build -f Dockerfile.python -t shelly-nordpool .
+docker build -f Dockerfile.python -t shelly-tibber .
 docker run --rm \
   -v $(pwd)/output:/app/output \
   -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-nordpool
+  shelly-tibber
 ```
 
 ### 2. Run Tests
@@ -74,12 +74,12 @@ docker run --rm \
 ./scripts/dev/run_tests.sh
 
 # Or manually with Docker
-docker build -f Dockerfile.python -t shelly-nordpool .
+docker build -f Dockerfile.python -t shelly-tibber .
 docker run --rm \
   -v $(pwd)/tests:/app/tests \
   -v $(pwd)/src:/app/src \
   -v $(pwd)/output:/app/output \
-  shelly-nordpool python -m pytest tests/ -v
+  shelly-tibber python -m pytest tests/ -v
 ```
 
 ### 3. Interactive Shell
@@ -89,7 +89,7 @@ docker run --rm -it \
   -v $(pwd):/app \
   -v $(pwd)/output:/app/output \
   -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-nordpool bash
+  shelly-tibber bash
 ```
 
 ## Configuration
@@ -149,7 +149,7 @@ This will test the connection to your Shelly device and set a simple example sch
 6. **Set Up Daily Scheduling:**
 Add to your crontab to run daily at 17:50:
 ```bash
-50 17 * * * cd /path/to/shelly-nordpool && ./scripts/run_daily.sh
+50 17 * * * cd /path/to/shelly-tibber && ./scripts/run_daily.sh
 ```
 
 ## Output
@@ -185,7 +185,7 @@ Add to your crontab to run daily at 17:50:
 ### Building Locally
 ```bash
 # Build the image
-docker build -f Dockerfile.python -t shelly-nordpool .
+docker build -f Dockerfile.python -t shelly-tibber .
 
 # Run with volume mounts for development
 docker run --rm \
@@ -193,13 +193,13 @@ docker run --rm \
   -v $(pwd)/output:/app/output \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-nordpool
+  shelly-tibber
 ```
 
 ### Debugging
 ```bash
 # Run with interactive shell
-docker run --rm -it -v $(pwd):/app -v $(pwd)/config.json:/app/config.json:ro shelly-nordpool bash
+docker run --rm -it -v $(pwd):/app -v $(pwd)/config.json:/app/config.json:ro shelly-tibber bash
 
 # Check logs
 tail -f logs/cron.log
@@ -228,13 +228,13 @@ ls -la output/
 3. **Network Issues**
    ```bash
    # Test network connectivity
-   docker run --rm shelly-nordpool curl -I https://api.tibber.com
+   docker run --rm shelly-tibber curl -I https://api.tibber.com
    ```
 
 4. **Python Import Errors**
    ```bash
    # Rebuild the image
-   docker build -f Dockerfile.python -t shelly-nordpool . --no-cache
+   docker build -f Dockerfile.python -t shelly-tibber . --no-cache
    ```
 
 5. **Configuration Issues**
