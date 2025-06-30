@@ -27,10 +27,16 @@ def main():
         # Load configuration
         config = get_config()
         
+        # Set debug level if enabled
+        if config['tibber']['debug']:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled")
+        
         # Create schedule manager
         schedule_manager = ShellyScheduleManager(
             shelly_host=config['shelly']['host'],
-            timeout=config['shelly']['timeout']
+            timeout=config['shelly']['timeout'],
+            debug=config['tibber']['debug']
         )
         
         logger.info(f"Connecting to Shelly device at {config['shelly']['host']}")

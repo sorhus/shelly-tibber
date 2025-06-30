@@ -20,7 +20,7 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.schedule_manager = ShellyScheduleManager("192.168.1.100")
+        self.schedule_manager = ShellyScheduleManager("192.168.1.100", debug=False)
         self.schedule_manager.logger = Mock()
 
     def test_empty_price_points(self):

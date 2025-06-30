@@ -35,7 +35,8 @@ class CheapestHoursScheduler:
         self.file_manager = FileManager()
         self.schedule_manager = ShellyScheduleManager(
             shelly_host=config['shelly']['host'],
-            timeout=config['shelly']['timeout']
+            timeout=config['shelly']['timeout'],
+            debug=config['tibber']['debug']
         )
         
     def clear_previous_run(self, date: str) -> None:

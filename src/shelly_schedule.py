@@ -28,14 +28,15 @@ class ScheduleJob:
 class ShellyScheduleManager:
     """Manages schedules on Shelly devices"""
     
-    def __init__(self, shelly_host: str, timeout: int = 10):
+    def __init__(self, shelly_host: str, timeout: int = 10, debug: bool = False):
         self.shelly_host = shelly_host
         self.timeout = timeout
+        self.debug = debug
         self.base_url = f"http://{shelly_host}/rpc"
         self.logger = logging.getLogger(__name__)
         
     def _make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Make an RPC request to the Shelly device and log the call to output/"""
+        """Make an RPC request to the Shelly device and log the call to output/ if debug mode is enabled"""
         payload = {
             "id": 1,
             "method": method
@@ -64,55 +65,83 @@ class ShellyScheduleManager:
                 # If serialization fails, convert to string
                 return str(obj)
 
-        # Prepare log data with safe serialization
-        log_data = {
-            "timestamp": datetime.now().isoformat(),
-            "method": method,
-            "params": safe_json_serialize(params),
-            "request": safe_json_serialize(payload)
-        }
+        # Only prepare log data if debug mode is enabled
+        log_data = None
+        log_filename = None
         
-        # Create daily subdirectory for logs
-        today = datetime.now().strftime('%Y-%m-%d')
-        log_dir = os.path.join("output", today)
-        os.makedirs(log_dir, exist_ok=True)
+        if self.debug:
+            # Prepare log data with safe serialization
+            log_data = {
+                "timestamp": datetime.now().isoformat(),
+                "method": method,
+                "params": safe_json_serialize(params),
+                "request": safe_json_serialize(payload)
+            }
+            
+            # Create daily subdirectory for logs
+            today = datetime.now().strftime('%Y-%m-%d')
+            log_dir = os.path.join("output", today)
+            os.makedirs(log_dir, exist_ok=True)
+            
+            log_filename = os.path.join(
+                log_dir,
+                f"shelly_call_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}.json"
+            )
         
-        log_filename = os.path.join(
-            log_dir,
-            f"shelly_call_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}.json"
-        )
         try:
             response = requests.post(
                 self.base_url,
                 json=payload,
                 timeout=self.timeout
             )
-            log_data["http_status"] = response.status_code
-            log_data["response_text"] = response.text
-            try:
-                result = response.json()
-                log_data["response_json"] = safe_json_serialize(result)
-            except Exception:
-                result = None
-                log_data["response_json"] = None
-            # Check for RPC errors
-            if result and "error" in result:
-                log_data["rpc_error"] = safe_json_serialize(result["error"])
+            
+            # Only log response data if debug mode is enabled
+            if self.debug and log_data:
+                log_data["http_status"] = response.status_code
+                log_data["response_text"] = response.text
+                try:
+                    result = response.json()
+                    log_data["response_json"] = safe_json_serialize(result)
+                except Exception:
+                    result = None
+                    log_data["response_json"] = None
+                
+                # Check for RPC errors
+                if result and "error" in result:
+                    log_data["rpc_error"] = safe_json_serialize(result["error"])
+                    with open(log_filename, "w") as f:
+                        json.dump(log_data, f, indent=2)
+                    raise Exception(f"RPC Error: {result['error']}")
+                
+                # Write successful response to log file
                 with open(log_filename, "w") as f:
                     json.dump(log_data, f, indent=2)
-                raise Exception(f"RPC Error: {result['error']}")
-            with open(log_filename, "w") as f:
-                json.dump(log_data, f, indent=2)
+            else:
+                # Parse response without logging
+                try:
+                    result = response.json()
+                except Exception:
+                    result = None
+                
+                # Check for RPC errors even without logging
+                if result and "error" in result:
+                    raise Exception(f"RPC Error: {result['error']}")
+            
             return result.get("params", result) if result else None
+            
         except requests.exceptions.RequestException as e:
-            log_data["exception"] = str(e)
-            with open(log_filename, "w") as f:
-                json.dump(log_data, f, indent=2)
+            # Log exception if debug mode is enabled
+            if self.debug and log_data and log_filename:
+                log_data["exception"] = str(e)
+                with open(log_filename, "w") as f:
+                    json.dump(log_data, f, indent=2)
             raise Exception(f"Request failed: {str(e)}")
         except Exception as e:
-            log_data["exception"] = str(e)
-            with open(log_filename, "w") as f:
-                json.dump(log_data, f, indent=2)
+            # Log exception if debug mode is enabled
+            if self.debug and log_data and log_filename:
+                log_data["exception"] = str(e)
+                with open(log_filename, "w") as f:
+                    json.dump(log_data, f, indent=2)
             raise Exception(f"Unexpected error: {str(e)}")
     
     def list_schedules(self) -> List[ScheduleJob]:
