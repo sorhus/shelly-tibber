@@ -123,7 +123,7 @@ class PriceAnalyzer:
             raise Exception(f"Failed to parse response: {str(e)}")
             
     def get_cheapest_hours(self) -> List[Dict[str, Any]]:
-        """Get the cheapest hours for tomorrow"""
+        """Get the cheapest hours for tomorrow, excluding the last hour of the day"""
         logger.info("Fetching electricity prices from Tibber...")
         
         try:
@@ -133,11 +133,25 @@ class PriceAnalyzer:
             # Parse response
             prices = self.parse_tibber_response(response)
             
+            # Filter out the last hour of the day (23:00-00:00)
+            filtered_prices = []
+            for price in prices:
+                dt = datetime.fromisoformat(price["startsAt"].replace('Z', '+00:00'))
+                if dt.hour != 23:  # Exclude 23:00 (last hour of the day)
+                    filtered_prices.append(price)
+                else:
+                    logger.info(f"Excluding last hour of day: {dt.strftime('%H:%M')} - {price['total']:.3f} SEK/kWh")
+            
+            if not filtered_prices:
+                raise Exception("No price data available after excluding last hour of day")
+            
+            logger.info(f"After filtering: {len(filtered_prices)} hours available (excluded last hour of day)")
+            
             # Sort by price and take the cheapest hours
-            sorted_prices = sorted(prices, key=lambda x: x["total"])
+            sorted_prices = sorted(filtered_prices, key=lambda x: x["total"])
             cheapest_hours = sorted_prices[:self.num_cheapest_hours]
             
-            logger.info(f"Found {len(cheapest_hours)} cheapest hours")
+            logger.info(f"Found {len(cheapest_hours)} cheapest hours (excluding last hour of day)")
             
             # Log the cheapest hours
             for i, price in enumerate(cheapest_hours, 1):

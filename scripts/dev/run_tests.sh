@@ -5,18 +5,24 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
 echo "🧪 Running unit tests in Docker..."
 echo "Building Docker image to ensure latest code..."
 
+# Change to project root
+cd "$PROJECT_ROOT"
+
 # Build Docker image
 echo "🔨 Building Docker image..."
-docker build -f Dockerfile.python -t shelly-tibber .
+docker build -f "$(pwd)/Dockerfile.python" -t shelly-tibber .
 
 echo "🚀 Running tests..."
 docker run --rm \
-  -v "$PROJECT_DIR/tests:/app/tests" \
-  -v "$PROJECT_DIR/src:/app/src" \
-  -v "$PROJECT_DIR/output:/app/output" \
+  -v "$(pwd)/tests:/app/tests" \
+  -v "$(pwd)/src:/app/src" \
+  -v "$(pwd)/output:/app/output" \
   shelly-tibber python -m pytest tests/ -v
 
 echo "✅ Tests completed" 

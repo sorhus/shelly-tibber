@@ -147,9 +147,9 @@ This will test the connection to your Shelly device and set a simple example sch
 ```
 
 6. **Set Up Daily Scheduling:**
-Add to your crontab to run daily at 17:50:
+Add to your crontab to run daily at 23:05:
 ```bash
-50 17 * * * cd /path/to/shelly-tibber && ./scripts/run_daily.sh
+5 23 * * * cd /path/to/shelly-tibber && ./scripts/run_daily.sh
 ```
 
 ## Output
