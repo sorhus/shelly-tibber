@@ -11,7 +11,7 @@ import json
 import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 @dataclass
 class ScheduleJob:
@@ -34,6 +34,11 @@ class ShellyScheduleManager:
         self.debug = debug
         self.base_url = f"http://{shelly_host}/rpc"
         self.logger = logging.getLogger(__name__)
+    
+    def debug_log(self, message: str):
+        """Debug logging function"""
+        if self.debug:
+            self.logger.debug(f"[DEBUG] {message}")
         
     def _make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make an RPC request to the Shelly device and log the call to output/ if debug mode is enabled"""
@@ -271,19 +276,27 @@ class ShellyScheduleManager:
         
         schedule_ids = []
         
-        # Sort price points by start time
-        sorted_price_points = sorted(price_points, key=lambda x: x['startsAt'])
+        # Convert to datetime objects and sort by absolute time (UTC)
+        time_tuples = []
+        for price_point in price_points:
+            start_time = datetime.fromisoformat(price_point['startsAt'].replace('Z', '+00:00'))
+            time_tuples.append((start_time, price_point))
         
-        if not sorted_price_points:
+        # Sort by UTC time to handle DST transitions correctly
+        time_tuples.sort(key=lambda x: x[0].astimezone(timezone.utc))
+        
+        if not time_tuples:
             return schedule_ids, []
         
-        # Convert to datetime objects
-        start_times = []
-        for price_point in sorted_price_points:
-            start_time = datetime.fromisoformat(price_point['startsAt'].replace('Z', '+00:00'))
-            start_times.append(start_time)
+        start_times = [t[0] for t in time_tuples]
         
-        # Find consecutive blocks
+        # Debug: Log sorted times to verify DST handling
+        self.debug_log("Sorted price points by UTC time:")
+        for i, st in enumerate(start_times):
+            utc_time = st.astimezone(timezone.utc)
+            self.debug_log(f"  {i+1}. Local: {st.isoformat()} | UTC: {utc_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        
+        # Find consecutive blocks (check if times are exactly 1 hour apart in absolute time)
         consecutive_blocks = []
         current_block_start = start_times[0]
         current_block_end = start_times[0] + timedelta(hours=1)
@@ -292,14 +305,22 @@ class ShellyScheduleManager:
             current_time = start_times[i]
             expected_time = current_block_end
             
-            if current_time == expected_time:
+            # Compare absolute time difference (handles DST transitions)
+            time_diff = abs((current_time - expected_time).total_seconds())
+            
+            self.debug_log(f"Checking hour {i+1}: current={current_time.strftime('%H:%M%z')} expected={expected_time.strftime('%H:%M%z')} diff={time_diff}s")
+            
+            if time_diff < 60:  # Less than 1 minute difference means consecutive
                 # Consecutive hour, extend the block
+                self.debug_log(f"  → Consecutive! Extending block to {(current_time + timedelta(hours=1)).strftime('%H:%M%z')}")
                 current_block_end = current_time + timedelta(hours=1)
             else:
                 # Non-consecutive, save current block and start new one
+                self.debug_log(f"  → Non-consecutive! Closing block {current_block_start.strftime('%H:%M%z')}-{current_block_end.strftime('%H:%M%z')}")
                 consecutive_blocks.append((current_block_start, current_block_end))
                 current_block_start = current_time
                 current_block_end = current_time + timedelta(hours=1)
+                self.debug_log(f"  → Starting new block at {current_block_start.strftime('%H:%M%z')}")
         
         # Don't forget the last block
         consecutive_blocks.append((current_block_start, current_block_end))
