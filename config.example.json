@@ -1,5 +1,5 @@
 {
-  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, analysis.clear_old_schedules.",
+  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules.",
   "tibber": {
     "token": "YOUR_TIBBER_API_TOKEN_HERE",
     "home_id": "YOUR_TIBBER_HOME_ID_HERE",
@@ -12,7 +12,9 @@
     "password": ""
   },
   "analysis": {
-    "num_cheapest_hours": 10,
+    "num_cheapest_hours": 10
+  },
+  "scheduling": {
     "clear_old_schedules": false
   }
 } 

@@ -129,8 +129,7 @@ If you want to clean up old schedules, set `"clear_old_schedules": true` in your
 
 ```json
 {
-  "analysis": {
-    "num_cheapest_hours": 10,
+  "scheduling": {
     "clear_old_schedules": true  // <--- Enable cleanup
   }
 }
@@ -166,8 +165,10 @@ The application uses `config.json` for all configuration:
     "password": ""
   },
   "analysis": {
-    "num_cheapest_hours": 10,        // <--- Configurable number of hours
-    "clear_old_schedules": false     // <--- Set to true to clean up old schedules
+    "num_cheapest_hours": 10        // <--- Configurable number of hours
+  },
+  "scheduling": {
+    "clear_old_schedules": false    // <--- Set to true to clean up old schedules
   }
 }
 ```

@@ -166,7 +166,7 @@ class CheapestHoursScheduler:
                     logger.warning(f"Failed to check for conflicting midnight OFF: {str(e)}")
             
             # Step 4: Optionally delete old schedules
-            clear_schedules = self.config.get('analysis', {}).get('clear_old_schedules', False)
+            clear_schedules = self.config.get('scheduling', {}).get('clear_old_schedules', False)
             if clear_schedules:
                 # Calculate yesterday's and day-before-yesterday's weekdays
                 today_date = datetime.now()
