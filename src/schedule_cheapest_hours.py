@@ -8,7 +8,7 @@ import os
 import sys
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
 # Add src directory to path for imports
@@ -102,17 +102,96 @@ class CheapestHoursScheduler:
             
             logger.info(f"Found {len(cheapest_hours)} cheapest hours")
             
-            # Step 3: Delete existing schedules
-            logger.info("Clearing existing schedules...")
-            self.schedule_manager.delete_all_schedules()
+            # Calculate the weekday for tomorrow (when these schedules will run)
+            # Get the first price point to determine the date
+            first_price = cheapest_hours[0]
+            dt = datetime.fromisoformat(first_price['startsAt'].replace('Z', '+00:00'))
+            # Python's weekday() returns 0=Monday, but cron uses 0=Sunday
+            # Convert: Python (0=Mon, 6=Sun) -> Cron (0=Sun, 1=Mon, ..., 6=Sat)
+            python_weekday = dt.weekday()
+            cron_weekday = (python_weekday + 1) % 7
             
-            # Step 4: Create new schedules based on price points
-            logger.info("Creating price-based schedules...")
+            logger.info(f"Schedules will run on {dt.strftime('%A')} (weekday {cron_weekday})")
+            
+            # Step 3: Check if 00:00 is in cheapest hours, and if so, remove any conflicting OFF at midnight
+            # This prevents a flicker when transitioning from day N 23:00 to day N+1 00:00
+            # MUST happen BEFORE cleaning up old schedules!
+            has_midnight_hour = any(
+                datetime.fromisoformat(price['startsAt'].replace('Z', '+00:00')).hour == 0 
+                for price in cheapest_hours
+            )
+            
+            if has_midnight_hour:
+                logger.info("00:00 is in cheapest hours - checking for conflicting midnight OFF schedule from previous day")
+                try:
+                    existing_schedules = self.schedule_manager.list_schedules()
+                    removed_conflict = False
+                    for schedule in existing_schedules:
+                        # Parse the timespec: "0 minute hour * * weekday"
+                        timespec_parts = schedule.timespec.split()
+                        if len(timespec_parts) >= 6:
+                            minute = timespec_parts[1]
+                            hour = timespec_parts[2]
+                            schedule_weekdays = timespec_parts[5]
+                            
+                            # Map text weekdays to numbers
+                            weekday_map = {'SUN': 0, 'MON': 1, 'TUE': 2, 'WED': 3, 'THU': 4, 'FRI': 5, 'SAT': 6}
+                            
+                            # Check if this is an OFF at 00:00 for our target weekday
+                            # Handle both numeric (1) and text (MON) formats
+                            is_target_weekday = False
+                            for wd in schedule_weekdays.split(','):
+                                wd = wd.strip()
+                                # Try numeric match
+                                if wd == str(cron_weekday):
+                                    is_target_weekday = True
+                                    break
+                                # Try text match
+                                if wd.upper() in weekday_map and weekday_map[wd.upper()] == cron_weekday:
+                                    is_target_weekday = True
+                                    break
+                            
+                            if hour == "0" and minute == "0" and is_target_weekday:
+                                # Check if it's an OFF command (handle both Switch.Set and switch.set)
+                                for call in schedule.calls:
+                                    method = call.get('method', '').lower()
+                                    if method == 'switch.set' and call.get('params', {}).get('on') is False:
+                                        logger.info(f"Found conflicting OFF at 00:00 (schedule {schedule.id}, weekday {cron_weekday}, timespec={schedule.timespec}) - removing it to avoid flicker")
+                                        self.schedule_manager.delete_schedule(schedule.id)
+                                        removed_conflict = True
+                                        break
+                    if not removed_conflict:
+                        logger.info("No conflicting midnight OFF schedule found (may have already been cleaned up or not exist)")
+                except Exception as e:
+                    logger.warning(f"Failed to check for conflicting midnight OFF: {str(e)}")
+            
+            # Step 4: Optionally delete old schedules (check CLEAR_SCHEDULES env var)
+            clear_schedules = os.getenv('CLEAR_SCHEDULES', 'false').lower() == 'true'
+            if clear_schedules:
+                # Calculate yesterday's and day-before-yesterday's weekdays
+                today_date = datetime.now()
+                yesterday = today_date - timedelta(days=1)
+                day_before_yesterday = today_date - timedelta(days=2)
+                
+                # Convert to cron weekdays
+                yesterday_cron = (yesterday.weekday() + 1) % 7
+                day_before_cron = (day_before_yesterday.weekday() + 1) % 7
+                
+                weekdays_to_delete = [yesterday_cron, day_before_cron]
+                logger.info(f"Clearing schedules for yesterday ({yesterday.strftime('%A')}) and day before ({day_before_yesterday.strftime('%A')})")
+                logger.info(f"Deleting schedules for weekdays: {weekdays_to_delete}")
+                
+                deleted_count = self.schedule_manager.delete_schedules_for_weekdays(weekdays_to_delete)
+                logger.info(f"Deleted {deleted_count} old schedules")
+            else:
+                logger.info("Keeping existing schedules (CLEAR_SCHEDULES not set)")
+            
+            # Step 5: Create new schedules based on price points with weekday specification
+            logger.info("Creating price-based schedules with weekday specification...")
 
             # Prepare and log the intended schedule
             schedule_plan = []
             for price_point in cheapest_hours:
-                from datetime import datetime, timedelta
                 start_time = datetime.fromisoformat(price_point['startsAt'].replace('Z', '+00:00'))
                 end_time = start_time + timedelta(hours=1)
                 schedule_plan.append({
@@ -121,7 +200,9 @@ class CheapestHoursScheduler:
                     'on_hour': start_time.hour,
                     'on_minute': start_time.minute,
                     'off_hour': end_time.hour,
-                    'off_minute': end_time.minute
+                    'off_minute': end_time.minute,
+                    'weekday': start_time.strftime('%A'),
+                    'cron_weekday': cron_weekday
                 })
             
             # Write the schedule plan to daily subdirectory
@@ -131,16 +212,20 @@ class CheapestHoursScheduler:
             with open(plan_filename, 'w') as f:
                 json.dump(schedule_plan, f, indent=2)
 
+            # Create schedules with weekday specification
             schedule_ids, consecutive_blocks = self.schedule_manager.create_price_based_schedules(
                 price_points=cheapest_hours,
-                switch_id=0
+                switch_id=0,
+                weekdays=[cron_weekday]
             )
-            logger.info(f"Created {len(schedule_ids)} schedules")
+            logger.info(f"Created {len(schedule_ids)} schedules for weekday {cron_weekday}")
             
-            # Step 5: Save success file
+            # Step 6: Save success file
             today = datetime.now().strftime('%Y-%m-%d')
             result_data = {
                 'date': today,
+                'target_weekday': cron_weekday,
+                'target_date': dt.strftime('%Y-%m-%d'),
                 'cheapest_hours': cheapest_hours,
                 'schedule_ids': schedule_ids,
                 'consecutive_blocks': [(start.isoformat(), end.isoformat()) for start, end in consecutive_blocks],

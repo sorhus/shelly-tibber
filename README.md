@@ -9,6 +9,8 @@ Automatically schedule your Shelly Pro 1 switch to turn on during the cheapest e
 ./scripts/run_daily.sh
 ```
 
+The scheduler automatically adds weekday specifications to all schedules, so they only run on the specific day they're meant for. This means you don't need to delete old schedules unless you want to - they'll simply skip execution on non-matching days.
+
 ### Run Tests
 ```bash
 ./scripts/dev/run_tests.sh
@@ -91,6 +93,63 @@ docker run --rm -it \
   -v $(pwd)/config.json:/app/config.json:ro \
   shelly-tibber bash
 ```
+
+## Weekday-Based Scheduling
+
+The scheduler automatically creates schedules with weekday specifications (e.g., Monday, Tuesday, etc.). This means:
+
+- **No Schedule Conflicts**: Each schedule only runs on its designated day of the week
+- **Accumulate Schedules**: You can run the scheduler multiple days in a row to build up schedules for different days
+- **No Need to Clear**: Old schedules automatically skip execution when it's not their day
+
+### Example:
+1. Run on Monday evening → Creates schedules for Tuesday (weekday=Tuesday)
+2. Run on Tuesday evening → Creates schedules for Wednesday (weekday=Wednesday)
+3. Both sets of schedules coexist on the Shelly device
+4. On Tuesday, only Tuesday's schedules run
+5. On Wednesday, only Wednesday's schedules run
+
+### Midnight Crossing Behavior
+
+The system intelligently handles schedules that cross midnight:
+
+**Scenario:** Tuesday 23:00 is cheap, Wednesday 00:00 is also cheap
+1. **Monday evening** (scheduling for Tuesday):
+   - Creates: ON at 23:00 Tuesday, OFF at 00:00 Wednesday
+2. **Tuesday evening** (scheduling for Wednesday):
+   - Detects 00:00 is in cheapest hours
+   - **Removes the OFF at 00:00 Wednesday** (from yesterday's schedule)
+   - Creates: ON at 00:00 Wednesday, OFF at 01:00 Wednesday
+3. **Result**: Device stays on continuously from 23:00 Tuesday through 01:00 Wednesday (no flicker!)
+
+This ensures seamless operation across midnight when consecutive hours are cheap.
+
+### Clearing Old Schedules (Optional)
+If you want to clean up old schedules, set the `CLEAR_SCHEDULES` environment variable. This will delete schedules for **yesterday** and the **day before yesterday** only, keeping today's and future schedules intact:
+
+```bash
+# Clear old schedules (yesterday and day before) before creating new ones
+CLEAR_SCHEDULES=true ./scripts/run_daily.sh
+
+# Or with Docker
+docker run --rm \
+  -e CLEAR_SCHEDULES=true \
+  -v $(pwd)/output:/app/output \
+  -v $(pwd)/config.json:/app/config.json:ro \
+  shelly-tibber
+```
+
+**Note:** By default, `CLEAR_SCHEDULES=false`, so old schedules are kept. When enabled, only schedules from the past 2 days are removed, preserving schedules for today and any future days.
+
+### Example Cleanup Scenario
+
+Running on **Wednesday evening** with `CLEAR_SCHEDULES=true`:
+- ✅ **Keeps**: Wednesday's schedules (today)
+- ✅ **Keeps**: Any future schedules (if they exist)
+- ❌ **Deletes**: Tuesday's schedules (yesterday)
+- ❌ **Deletes**: Monday's schedules (day before yesterday)
+
+This ensures your Shelly device stays clean without accidentally removing schedules that haven't run yet.
 
 ## Configuration
 

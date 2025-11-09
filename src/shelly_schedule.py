@@ -243,10 +243,67 @@ class ShellyScheduleManager:
             self.logger.error(f"Failed to delete all schedules: {str(e)}")
             raise
     
+    def delete_schedules_for_weekdays(self, weekdays: List[int]) -> int:
+        """Delete schedules that match specific weekdays
+        
+        Args:
+            weekdays: List of weekday numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
+        
+        Returns:
+            Number of schedules deleted
+        """
+        self.logger.info(f"Deleting schedules for weekdays: {weekdays}")
+        
+        try:
+            # Get all existing schedules
+            schedules = self.list_schedules()
+            
+            deleted_count = 0
+            for schedule in schedules:
+                # Parse the timespec to check if it matches our weekdays
+                # Timespec format: "0 minute hour * * weekday"
+                timespec_parts = schedule.timespec.split()
+                if len(timespec_parts) >= 6:
+                    schedule_weekdays = timespec_parts[5]
+                    
+                    # Check if any of the target weekdays match this schedule
+                    # Handle both single weekday (e.g., "1") and comma-separated (e.g., "1,2,3")
+                    schedule_weekday_list = schedule_weekdays.split(',')
+                    
+                    for target_weekday in weekdays:
+                        if str(target_weekday) in schedule_weekday_list:
+                            self.logger.info(f"Deleting schedule {schedule.id} (weekday {schedule_weekdays})")
+                            self.delete_schedule(schedule.id)
+                            deleted_count += 1
+                            break
+            
+            self.logger.info(f"Deleted {deleted_count} schedules for weekdays {weekdays}")
+            return deleted_count
+            
+        except Exception as e:
+            self.logger.error(f"Failed to delete schedules for weekdays {weekdays}: {str(e)}")
+            raise
+    
     def create_switch_schedule(self, hour: int, minute: int = 0, switch_id: int = 0, 
-                              turn_on: bool = True, days: str = "*") -> int:
-        """Create a simple switch schedule for a specific time"""
-        timespec = f"0 {minute} {hour} * * {days}"
+                              turn_on: bool = True, days: str = "*", weekdays: Optional[List[int]] = None) -> int:
+        """Create a simple switch schedule for a specific time
+        
+        Args:
+            hour: Hour of day (0-23)
+            minute: Minute of hour (0-59)
+            switch_id: Switch ID to control
+            turn_on: Whether to turn on (True) or off (False)
+            days: Day of month specification (* for all, or specific day)
+            weekdays: Optional list of weekday numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
+                     If provided, overrides the 'days' parameter
+        """
+        # If weekdays are specified, use them instead of the days parameter
+        if weekdays is not None:
+            # Convert weekdays list to comma-separated string for cron
+            weekday_str = ",".join(str(d) for d in weekdays)
+            timespec = f"0 {minute} {hour} * * {weekday_str}"
+        else:
+            timespec = f"0 {minute} {hour} * * {days}"
         
         calls = [{
             "method": "Switch.Set",
@@ -259,7 +316,7 @@ class ShellyScheduleManager:
         return self.create_schedule(timespec, calls)
     
     def create_price_based_schedules(self, price_points: List[Dict[str, Any]], 
-                                   switch_id: int = 0) -> tuple[List[int], List[tuple]]:
+                                   switch_id: int = 0, weekdays: Optional[List[int]] = None) -> tuple[List[int], List[tuple]]:
         """
         Create schedules based on price points.
         Identifies consecutive hours and creates continuous blocks for all provided price points.
@@ -268,11 +325,14 @@ class ShellyScheduleManager:
         Args:
             price_points: List of price points with 'startsAt' timestamps
             switch_id: Switch ID to control
+            weekdays: Optional list of weekday numbers (0=Sunday, 1=Monday, ..., 6=Saturday) for the schedule to run on
             
         Returns:
             Tuple of (schedule_ids, consecutive_blocks)
         """
         self.logger.info(f"Creating price-based schedules for {len(price_points)} price points")
+        if weekdays:
+            self.logger.info(f"Schedules will run on weekdays: {weekdays}")
         
         schedule_ids = []
         
@@ -336,18 +396,29 @@ class ShellyScheduleManager:
                 hour=block_start.hour,
                 minute=block_start.minute,
                 switch_id=switch_id,
-                turn_on=True
+                turn_on=True,
+                weekdays=weekdays
             )
             schedule_ids.append(on_schedule_id)
             
             self.logger.info(f"Created ON schedule {on_schedule_id} for {block_start.strftime('%H:%M')}")
             
             # Create OFF schedule at the end of this block
+            # If block_end is on a different day than block_start, calculate the correct weekday for OFF
+            off_weekdays = weekdays
+            if weekdays and block_start.date() != block_end.date():
+                # OFF time crosses into next day, use next day's weekday
+                python_weekday = block_end.weekday()
+                cron_weekday = (python_weekday + 1) % 7
+                off_weekdays = [cron_weekday]
+                self.logger.info(f"OFF time crosses midnight - using weekday {cron_weekday} ({block_end.strftime('%A')}) instead of {weekdays}")
+            
             off_schedule_id = self.create_switch_schedule(
                 hour=block_end.hour,
                 minute=block_end.minute,
                 switch_id=switch_id,
-                turn_on=False
+                turn_on=False,
+                weekdays=off_weekdays
             )
             schedule_ids.append(off_schedule_id)
             

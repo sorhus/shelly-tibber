@@ -392,13 +392,8 @@ class EnergyAnalyzer:
             # Calculate daily summaries
             daily_summaries = self.calculate_daily_summaries(energy_usage)
             
-            # Log results
-            logger.info("Energy analysis completed")
-            logger.info(f"Analyzed {len(daily_summaries)} days with consumption data")
-            
             # Log which dates were actually analyzed
             analyzed_dates = [summary.date for summary in daily_summaries]
-            logger.info(f"Dates analyzed: {', '.join(analyzed_dates)}")
             
             # Calculate overall efficiency
             total_consumption = sum(summary.total_consumption for summary in daily_summaries)

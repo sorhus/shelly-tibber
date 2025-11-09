@@ -3,12 +3,11 @@
 # Daily electricity price scheduling script
 # Run this from crontab to schedule Shelly switch for cheapest hours
 
-set -e  # Exit on any error
-
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 FORCE_RUN="${FORCE_RUN:-false}"
+CLEAR_SCHEDULES="${CLEAR_SCHEDULES:-false}"
 
 # Log file
 LOG_FILE="$PROJECT_DIR/logs/cron.log"
@@ -31,24 +30,32 @@ cd "$PROJECT_DIR"
 
 log "Starting daily electricity price scheduling"
 log "FORCE_RUN mode: $FORCE_RUN"
+log "CLEAR_SCHEDULES mode: $CLEAR_SCHEDULES"
 
 # Build Docker image to ensure latest code
 log "Building Docker image to ensure latest code..."
 docker build -f Dockerfile.python -t shelly-tibber . 2>&1 | tee -a "$LOG_FILE"
+BUILD_EXIT_CODE=${PIPESTATUS[0]}
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+    log "ERROR: Docker build failed with exit code $BUILD_EXIT_CODE"
+    exit 1
+fi
 
 # Run the Docker container
 log "Running the scheduler..."
 docker run --rm \
     -e FORCE_RUN="$FORCE_RUN" \
+    -e CLEAR_SCHEDULES="${CLEAR_SCHEDULES:-false}" \
     -v "$PROJECT_DIR/output:/app/output" \
     -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
     shelly-tibber \
     2>&1 | tee -a "$LOG_FILE"
 
-# Check exit status
-if [ $? -eq 0 ]; then
+# Check exit status - use PIPESTATUS to get docker's exit code, not tee's
+EXIT_CODE=${PIPESTATUS[0]}
+if [ $EXIT_CODE -eq 0 ]; then
     log "Daily scheduling completed successfully"
 else
-    log "ERROR: Daily scheduling failed"
+    log "ERROR: Daily scheduling failed with exit code $EXIT_CODE"
     exit 1
 fi 
