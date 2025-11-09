@@ -125,25 +125,22 @@ The system intelligently handles schedules that cross midnight:
 This ensures seamless operation across midnight when consecutive hours are cheap.
 
 ### Clearing Old Schedules (Optional)
-If you want to clean up old schedules, set the `CLEAR_SCHEDULES` environment variable. This will delete schedules for **yesterday** and the **day before yesterday** only, keeping today's and future schedules intact:
+If you want to clean up old schedules, set `"clear_old_schedules": true` in your `config.json`. This will delete schedules for **yesterday** and the **day before yesterday** only, keeping today's and future schedules intact:
 
-```bash
-# Clear old schedules (yesterday and day before) before creating new ones
-CLEAR_SCHEDULES=true ./scripts/run_daily.sh
-
-# Or with Docker
-docker run --rm \
-  -e CLEAR_SCHEDULES=true \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-tibber
+```json
+{
+  "analysis": {
+    "num_cheapest_hours": 10,
+    "clear_old_schedules": true  // <--- Enable cleanup
+  }
+}
 ```
 
-**Note:** By default, `CLEAR_SCHEDULES=false`, so old schedules are kept. When enabled, only schedules from the past 2 days are removed, preserving schedules for today and any future days.
+**Note:** By default, this is `false`, so old schedules are kept. When enabled, only schedules from the past 2 days are removed, preserving schedules for today and any future days.
 
 ### Example Cleanup Scenario
 
-Running on **Wednesday evening** with `CLEAR_SCHEDULES=true`:
+Running on **Wednesday evening** with `"clear_old_schedules": true`:
 - ✅ **Keeps**: Wednesday's schedules (today)
 - ✅ **Keeps**: Any future schedules (if they exist)
 - ❌ **Deletes**: Tuesday's schedules (yesterday)
@@ -169,7 +166,8 @@ The application uses `config.json` for all configuration:
     "password": ""
   },
   "analysis": {
-    "num_cheapest_hours": 10  // <--- Configurable number of hours
+    "num_cheapest_hours": 10,        // <--- Configurable number of hours
+    "clear_old_schedules": false     // <--- Set to true to clean up old schedules
   }
 }
 ```

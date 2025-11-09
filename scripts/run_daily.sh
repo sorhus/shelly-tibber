@@ -7,7 +7,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 FORCE_RUN="${FORCE_RUN:-false}"
-CLEAR_SCHEDULES="${CLEAR_SCHEDULES:-false}"
 
 # Log file
 LOG_FILE="$PROJECT_DIR/logs/cron.log"
@@ -30,7 +29,6 @@ cd "$PROJECT_DIR"
 
 log "Starting daily electricity price scheduling"
 log "FORCE_RUN mode: $FORCE_RUN"
-log "CLEAR_SCHEDULES mode: $CLEAR_SCHEDULES"
 
 # Build Docker image to ensure latest code
 log "Building Docker image to ensure latest code..."
@@ -45,7 +43,6 @@ fi
 log "Running the scheduler..."
 docker run --rm \
     -e FORCE_RUN="$FORCE_RUN" \
-    -e CLEAR_SCHEDULES="${CLEAR_SCHEDULES:-false}" \
     -v "$PROJECT_DIR/output:/app/output" \
     -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
     shelly-tibber \

@@ -165,8 +165,8 @@ class CheapestHoursScheduler:
                 except Exception as e:
                     logger.warning(f"Failed to check for conflicting midnight OFF: {str(e)}")
             
-            # Step 4: Optionally delete old schedules (check CLEAR_SCHEDULES env var)
-            clear_schedules = os.getenv('CLEAR_SCHEDULES', 'false').lower() == 'true'
+            # Step 4: Optionally delete old schedules
+            clear_schedules = self.config.get('analysis', {}).get('clear_old_schedules', False)
             if clear_schedules:
                 # Calculate yesterday's and day-before-yesterday's weekdays
                 today_date = datetime.now()
@@ -184,7 +184,7 @@ class CheapestHoursScheduler:
                 deleted_count = self.schedule_manager.delete_schedules_for_weekdays(weekdays_to_delete)
                 logger.info(f"Deleted {deleted_count} old schedules")
             else:
-                logger.info("Keeping existing schedules (CLEAR_SCHEDULES not set)")
+                logger.info("Keeping existing schedules (clear_old_schedules=false)")
             
             # Step 5: Create new schedules based on price points with weekday specification
             logger.info("Creating price-based schedules with weekday specification...")
