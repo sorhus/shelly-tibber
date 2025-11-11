@@ -147,6 +147,59 @@ Running on **Wednesday evening** with `"clear_old_schedules": true`:
 
 This ensures your Shelly device stays clean without accidentally removing schedules that haven't run yet.
 
+## Price Threshold Mode
+
+Instead of scheduling only the N cheapest hours, you can set a price threshold per month. Any hour with a price **below** the threshold will be scheduled:
+
+```json
+{
+  "scheduling": {
+    "price_threshold": {
+      "enabled": true,
+      "monthly_thresholds": {
+        "1": 0.50,   // January: schedule hours with spot price < 0.50 SEK/kWh
+        "2": 0.50,   // February
+        "3": 0.60,   // March
+        "4": 0.70,   // April
+        "5": 0.80,   // May
+        "6": 0.90,   // June (summer, higher threshold)
+        "7": 0.90,   // July
+        "8": 0.80,   // August
+        "9": 0.70,   // September
+        "10": 0.60,  // October
+        "11": 0.55,  // November
+        "12": 0.50   // December (winter, lower threshold)
+      }
+    }
+  }
+}
+```
+
+### How It Works:
+1. **Always schedules the N cheapest hours** (e.g., 10 cheapest)
+2. **Additionally schedules any other hours below the threshold**
+3. Combines them (removes duplicates)
+
+**Example** with `num_cheapest_hours: 10` and threshold `0.55 SEK/kWh` (spot price):
+- Top 10 cheapest (by total price): hours with spot prices 0.45, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.64
+- Other hours with spot price below 0.55: 0.51 (hour 15), 0.53 (hour 20)
+- **Result**: 12 hours scheduled (10 cheapest + 2 extras with spot < 0.55)
+
+**Benefits:**
+- ✅ You always get your top N cheapest hours
+- ✅ Plus any other cheap hours you don't want to miss
+- ✅ If all 24 hours are below threshold → Device runs 24/7
+
+### What Does the Threshold Compare Against?
+The threshold is compared against the **spot price only** (the `energy` field from Tibber API).
+
+**Why spot price?**
+- ✅ Spot price is the variable component that reflects market conditions
+- ✅ Energy tax, grid fees, and VAT are relatively fixed costs
+- ✅ Makes it easier to set thresholds based on market prices
+
+So if the threshold is `0.50 SEK/kWh`, any hour with a **spot price** below 0.50 will be scheduled (in addition to your N cheapest hours). Your actual total cost per kWh will be higher due to energy tax, grid fees, and VAT.
+
 ## Configuration
 
 ### Configuration File
@@ -168,7 +221,15 @@ The application uses `config.json` for all configuration:
     "num_cheapest_hours": 10        // <--- Configurable number of hours
   },
   "scheduling": {
-    "clear_old_schedules": false    // <--- Set to true to clean up old schedules
+    "clear_old_schedules": false,   // <--- Set to true to clean up old schedules
+    "price_threshold": {
+      "enabled": false,             // <--- Enable price threshold mode
+      "monthly_thresholds": {       // <--- Prices per month (SEK/kWh, incl. all taxes/fees)
+        "1": 0.50,                  // January
+        "2": 0.50,                  // February
+        // ... etc for all 12 months
+      }
+    }
   }
 }
 ```

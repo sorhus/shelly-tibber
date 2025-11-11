@@ -1,5 +1,5 @@
 {
-  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules.",
+  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules, scheduling.price_threshold.",
   "tibber": {
     "token": "YOUR_TIBBER_API_TOKEN_HERE",
     "home_id": "YOUR_TIBBER_HOME_ID_HERE",
@@ -15,6 +15,24 @@
     "num_cheapest_hours": 10
   },
   "scheduling": {
-    "clear_old_schedules": false
+    "clear_old_schedules": false,
+    "price_threshold": {
+      "enabled": false,
+      "monthly_thresholds": {
+        "_comment": "Spot prices (SEK/kWh) - excludes energy tax, grid fees, and VAT",
+        "1": 0.5,
+        "2": 0.5,
+        "3": 0.5,
+        "4": 0.2,
+        "5": 0.1,
+        "6": 0.1,
+        "7": 0.1,
+        "8": 0.1,
+        "9": 0.1,
+        "10": 0.2,
+        "11": 0.5,
+        "12": 0.5
+      }
+    }
   }
 } 
