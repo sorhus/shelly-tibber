@@ -1,0 +1,6 @@
+## Git Workflow
+
+- Never commit directly to `main` or `master` branch
+- Always create a feature branch for changes (e.g., `feature/description`, `fix/description`)
+- Push branches for review rather than merging directly
+- Only merge to main when explicitly requested by the user
