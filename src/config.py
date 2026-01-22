@@ -7,13 +7,16 @@ Handles loading configuration from config.json file
 import os
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union, overload, Literal
+
+from models import AppConfig
 
 logger = logging.getLogger(__name__)
 
-def load_config() -> Dict[str, Any]:
+
+def load_config_dict() -> Dict[str, Any]:
     """
-    Load configuration from config.json file
+    Load configuration from config.json file as a dictionary
     """
     config_file = 'config.json'
     
@@ -27,6 +30,15 @@ def load_config() -> Dict[str, Any]:
         return config
     except (json.JSONDecodeError, IOError) as e:
         raise Exception(f"Failed to load config from {config_file}: {e}")
+
+
+def load_config() -> Dict[str, Any]:
+    """
+    Load configuration from config.json file
+    
+    Deprecated: Use load_config_dict() or get_typed_config() instead
+    """
+    return load_config_dict()
 
 def apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -75,9 +87,24 @@ def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> Non
 
 def get_config(require_home_id: bool = True) -> Dict[str, Any]:
     """
-    Get validated configuration with defaults applied
+    Get validated configuration with defaults applied (as dictionary)
+    
+    For type-safe access, use get_typed_config() instead.
     """
-    config = load_config()
+    config = load_config_dict()
     config = apply_defaults(config)
     validate_config(config, require_home_id=require_home_id)
-    return config 
+    return config
+
+
+def get_typed_config(require_home_id: bool = True) -> AppConfig:
+    """
+    Get validated configuration as a typed AppConfig dataclass
+    
+    This provides type-safe access to configuration values:
+        config = get_typed_config()
+        token = config.tibber.token  # IDE autocomplete works!
+        host = config.shelly.host
+    """
+    config_dict = get_config(require_home_id=require_home_id)
+    return AppConfig.from_dict(config_dict) 
