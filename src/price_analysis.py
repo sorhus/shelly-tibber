@@ -18,18 +18,20 @@ from exceptions import (
     HTTPRequestError,
     JSONParseError,
 )
+from retry import RetryConfig, execute_with_retry
 
 logger = logging.getLogger(__name__)
 
 class PriceAnalyzer:
     """Analyzes electricity prices from Tibber API"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], retry_config: RetryConfig = None):
         self.config = config
         self.token = config['tibber']['token']
         self.home_id = config['tibber']['home_id']
         self.num_cheapest_hours = config['analysis']['num_cheapest_hours']
         self.debug = config['tibber']['debug']
+        self.retry_config = retry_config or RetryConfig()
         
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -37,7 +39,18 @@ class PriceAnalyzer:
             logger.debug(f"[DEBUG] {message}")
             
     def fetch_tibber_data(self) -> Dict[str, Any]:
-        """Fetch data from Tibber API"""
+        """Fetch data from Tibber API with retry logic"""
+        if self.retry_config.enabled:
+            return execute_with_retry(
+                self._fetch_tibber_data_internal,
+                self.retry_config,
+                exceptions=(HTTPRequestError,)
+            )
+        else:
+            return self._fetch_tibber_data_internal()
+    
+    def _fetch_tibber_data_internal(self) -> Dict[str, Any]:
+        """Internal method to fetch data from Tibber API"""
         self.debug_log("Starting price fetch...")
         
         request_data = {
