@@ -150,7 +150,7 @@ class TestParseTibberResponse(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             self.analyzer.parse_tibber_response(response)
         
-        self.assertIn("not available", str(context.exception).lower())
+        self.assertIn("no price data", str(context.exception).lower())
 
     def test_parse_empty_tomorrow_prices(self):
         """Test error when tomorrow's prices list is empty"""
@@ -175,7 +175,7 @@ class TestParseTibberResponse(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             self.analyzer.parse_tibber_response(response)
         
-        self.assertIn("empty", str(context.exception).lower())
+        self.assertIn("no price data", str(context.exception).lower())
 
 
 class TestGetCheapestHours(unittest.TestCase):
