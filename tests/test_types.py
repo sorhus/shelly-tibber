@@ -4,14 +4,9 @@ Unit tests for type definitions
 """
 
 import unittest
-import sys
-import os
 from datetime import datetime, timezone
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from models import (
+from src.models import (
     TibberConfig,
     ShellyConfig,
     AnalysisConfig,

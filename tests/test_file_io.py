@@ -4,17 +4,13 @@ Unit tests for file I/O module
 """
 
 import unittest
-import sys
 import os
 import json
 import tempfile
 import shutil
 from datetime import datetime, timedelta
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from file_io import FileManager
+from src.file_io import FileManager
 
 
 class TestFileManager(unittest.TestCase):

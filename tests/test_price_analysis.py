@@ -4,15 +4,10 @@ Unit tests for price analysis module
 """
 
 import unittest
-import sys
-import os
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from price_analysis import PriceAnalyzer
+from src.price_analysis import PriceAnalyzer
 
 
 class TestPriceAnalyzerInit(unittest.TestCase):
@@ -255,7 +250,7 @@ class TestPriceThreshold(unittest.TestCase):
         
         with patch.object(analyzer, 'fetch_tibber_data') as mock_fetch:
             with patch.object(analyzer, 'parse_tibber_response', return_value=prices):
-                with patch('price_analysis.datetime') as mock_datetime:
+                with patch('src.price_analysis.datetime') as mock_datetime:
                     mock_datetime.now.return_value.month = 1  # January
                     mock_datetime.fromisoformat = datetime.fromisoformat
                     mock_fetch.return_value = {}

@@ -5,20 +5,16 @@ Main orchestrator for scheduling electricity usage during cheapest hours
 """
 
 import os
-import sys
 import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any
 
-# Add src directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from price_analysis import PriceAnalyzer
-from file_io import FileManager
-from shelly_schedule import ShellyScheduleManager
-from config import get_config
-from retry import RetryConfig
+from src.price_analysis import PriceAnalyzer
+from src.file_io import FileManager
+from src.shelly_schedule import ShellyScheduleManager
+from src.config import get_config
+from src.retry import RetryConfig
 
 # Configure logging
 logging.basicConfig(

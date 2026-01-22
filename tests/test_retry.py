@@ -4,15 +4,10 @@ Unit tests for retry module
 """
 
 import unittest
-import sys
-import os
 from unittest.mock import Mock, patch, call
 import time
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from retry import retry_with_backoff, RetryConfig, execute_with_retry
+from src.retry import retry_with_backoff, RetryConfig, execute_with_retry
 
 
 class TestRetryWithBackoff(unittest.TestCase):
