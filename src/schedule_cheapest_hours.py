@@ -18,6 +18,7 @@ from price_analysis import PriceAnalyzer
 from file_io import FileManager
 from shelly_schedule import ShellyScheduleManager
 from config import get_config
+from retry import RetryConfig
 
 # Configure logging
 logging.basicConfig(
@@ -32,13 +33,19 @@ class CheapestHoursScheduler:
     def __init__(self, config: Dict[str, Any], dry_run: bool = False):
         self.config = config
         self.dry_run = dry_run
-        self.price_analyzer = PriceAnalyzer(config)
+        
+        # Get retry configuration from config or use defaults
+        retry_dict = config.get('retry', {})
+        retry_config = RetryConfig.from_dict(retry_dict) if retry_dict else RetryConfig()
+        
+        self.price_analyzer = PriceAnalyzer(config, retry_config=retry_config)
         self.file_manager = FileManager()
         self.schedule_manager = ShellyScheduleManager(
             shelly_host=config['shelly']['host'],
             timeout=config['shelly']['timeout'],
             debug=config['tibber']['debug'],
-            dry_run=dry_run
+            dry_run=dry_run,
+            retry_config=retry_config
         )
         
         if dry_run:

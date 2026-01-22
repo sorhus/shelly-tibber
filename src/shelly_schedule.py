@@ -20,6 +20,7 @@ from exceptions import (
     ScheduleCreationError,
     ScheduleDeletionError,
 )
+from retry import RetryConfig, execute_with_retry
 
 @dataclass
 class ScheduleJob:
@@ -36,7 +37,14 @@ class ScheduleJob:
 class ShellyScheduleManager:
     """Manages schedules on Shelly devices"""
     
-    def __init__(self, shelly_host: str, timeout: int = 10, debug: bool = False, dry_run: bool = False):
+    def __init__(
+        self, 
+        shelly_host: str, 
+        timeout: int = 10, 
+        debug: bool = False,
+        dry_run: bool = False,
+        retry_config: Optional[RetryConfig] = None
+    ):
         self.shelly_host = shelly_host
         self.timeout = timeout
         self.debug = debug
@@ -44,6 +52,7 @@ class ShellyScheduleManager:
         self.base_url = f"http://{shelly_host}/rpc"
         self.logger = logging.getLogger(__name__)
         self._dry_run_schedule_counter = 0  # For generating fake schedule IDs in dry-run mode
+        self.retry_config = retry_config or RetryConfig()
     
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -51,7 +60,23 @@ class ShellyScheduleManager:
             self.logger.debug(f"[DEBUG] {message}")
         
     def _make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Make an RPC request to the Shelly device and log the call to output/ if debug mode is enabled"""
+        """Make an RPC request to the Shelly device with retry logic"""
+        # Use retry logic for transient errors (connection, timeout)
+        # Don't retry RPC errors as they indicate actual device-side issues
+        def do_request():
+            return self._make_request_internal(method, params)
+        
+        if self.retry_config.enabled:
+            return execute_with_retry(
+                do_request,
+                self.retry_config,
+                exceptions=(ShellyConnectionError, ShellyTimeoutError)
+            )
+        else:
+            return do_request()
+    
+    def _make_request_internal(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Internal method to make an RPC request to the Shelly device"""
         payload = {
             "id": 1,
             "method": method

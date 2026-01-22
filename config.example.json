@@ -1,5 +1,5 @@
 {
-  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules, scheduling.price_threshold.",
+  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules, scheduling.price_threshold, retry.",
   "tibber": {
     "token": "YOUR_TIBBER_API_TOKEN_HERE",
     "home_id": "YOUR_TIBBER_HOME_ID_HERE",
@@ -34,5 +34,13 @@
         "12": 0.5
       }
     }
+  },
+  "retry": {
+    "_comment": "Retry settings for network requests. Applies to both Tibber API and Shelly device.",
+    "enabled": true,
+    "max_attempts": 3,
+    "initial_delay": 1.0,
+    "backoff_factor": 2.0,
+    "max_delay": 60.0
   }
 } 
