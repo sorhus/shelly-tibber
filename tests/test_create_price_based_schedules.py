@@ -50,8 +50,8 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called correctly
         expected_calls = [
-            call(hour=10, minute=0, switch_id=0, turn_on=True),  # ON at 10:00
-            call(hour=11, minute=0, switch_id=0, turn_on=False)  # OFF at 11:00
+            call(hour=10, minute=0, switch_id=0, turn_on=True, weekdays=None),  # ON at 10:00
+            call(hour=11, minute=0, switch_id=0, turn_on=False, weekdays=None)  # OFF at 11:00
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -75,8 +75,8 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called correctly
         expected_calls = [
-            call(hour=10, minute=0, switch_id=0, turn_on=True),   # ON at 10:00
-            call(hour=13, minute=0, switch_id=0, turn_on=False)   # OFF at 13:00 (3 hours later)
+            call(hour=10, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 10:00
+            call(hour=13, minute=0, switch_id=0, turn_on=False, weekdays=None)   # OFF at 13:00 (3 hours later)
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -100,12 +100,12 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called correctly
         expected_calls = [
-            call(hour=10, minute=0, switch_id=0, turn_on=True),   # ON at 10:00 (block 1)
-            call(hour=11, minute=0, switch_id=0, turn_on=False),  # OFF at 11:00 (block 1)
-            call(hour=14, minute=0, switch_id=0, turn_on=True),   # ON at 14:00 (block 2)
-            call(hour=15, minute=0, switch_id=0, turn_on=False),  # OFF at 15:00 (block 2)
-            call(hour=22, minute=0, switch_id=0, turn_on=True),   # ON at 22:00 (block 3)
-            call(hour=23, minute=0, switch_id=0, turn_on=False)   # OFF at 23:00 (block 3)
+            call(hour=10, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 10:00 (block 1)
+            call(hour=11, minute=0, switch_id=0, turn_on=False, weekdays=None),  # OFF at 11:00 (block 1)
+            call(hour=14, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 14:00 (block 2)
+            call(hour=15, minute=0, switch_id=0, turn_on=False, weekdays=None),  # OFF at 15:00 (block 2)
+            call(hour=22, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 22:00 (block 3)
+            call(hour=23, minute=0, switch_id=0, turn_on=False, weekdays=None)   # OFF at 23:00 (block 3)
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -131,10 +131,10 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called correctly
         expected_calls = [
-            call(hour=10, minute=0, switch_id=0, turn_on=True),   # ON at 10:00 (block 1: 10-12)
-            call(hour=12, minute=0, switch_id=0, turn_on=False),  # OFF at 12:00 (block 1)
-            call(hour=14, minute=0, switch_id=0, turn_on=True),   # ON at 14:00 (block 2: 14-17)
-            call(hour=17, minute=0, switch_id=0, turn_on=False),  # OFF at 17:00 (block 2)
+            call(hour=10, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 10:00 (block 1: 10-12)
+            call(hour=12, minute=0, switch_id=0, turn_on=False, weekdays=None),  # OFF at 12:00 (block 1)
+            call(hour=14, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 14:00 (block 2: 14-17)
+            call(hour=17, minute=0, switch_id=0, turn_on=False, weekdays=None),  # OFF at 17:00 (block 2)
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -158,8 +158,8 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called correctly (sorted by time)
         expected_calls = [
-            call(hour=10, minute=0, switch_id=0, turn_on=True),   # ON at 10:00 (earliest)
-            call(hour=13, minute=0, switch_id=0, turn_on=False)   # OFF at 13:00 (3 hours later)
+            call(hour=10, minute=0, switch_id=0, turn_on=True, weekdays=None),   # ON at 10:00 (earliest)
+            call(hour=13, minute=0, switch_id=0, turn_on=False, weekdays=None)   # OFF at 13:00 (3 hours later)
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -208,8 +208,8 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         
         # Check that create_switch_schedule was called with correct switch_id
         expected_calls = [
-            call(hour=10, minute=0, switch_id=1, turn_on=True),   # ON at 10:00, switch_id=1
-            call(hour=11, minute=0, switch_id=1, turn_on=False)   # OFF at 11:00, switch_id=1
+            call(hour=10, minute=0, switch_id=1, turn_on=True, weekdays=None),   # ON at 10:00, switch_id=1
+            call(hour=11, minute=0, switch_id=1, turn_on=False, weekdays=None)   # OFF at 11:00, switch_id=1
         ]
         self.assertEqual(mock_create.call_args_list, expected_calls)
 
@@ -242,10 +242,10 @@ class TestCreatePriceBasedSchedules(unittest.TestCase):
         last_call = mock_create.call_args_list[-1]
         
         # First call should be ON at 00:00
-        self.assertEqual(first_call, call(hour=0, minute=0, switch_id=0, turn_on=True))
+        self.assertEqual(first_call, call(hour=0, minute=0, switch_id=0, turn_on=True, weekdays=None))
         
         # Last call should be OFF at 12:00
-        self.assertEqual(last_call, call(hour=12, minute=0, switch_id=0, turn_on=False))
+        self.assertEqual(last_call, call(hour=12, minute=0, switch_id=0, turn_on=False, weekdays=None))
 
 
 if __name__ == '__main__':
