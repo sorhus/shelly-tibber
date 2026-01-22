@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from shelly_schedule import ShellyScheduleManager, ScheduleJob
+from exceptions import ShellyConnectionError
 
 
 class TestShellyScheduleManagerInit(unittest.TestCase):
@@ -252,7 +253,7 @@ class TestTestConnection(unittest.TestCase):
     def test_connection_failure(self):
         """Test failed connection"""
         with patch.object(self.manager, '_make_request') as mock_request:
-            mock_request.side_effect = Exception("Connection refused")
+            mock_request.side_effect = ShellyConnectionError("Connection refused")
             
             result = self.manager.test_connection()
         

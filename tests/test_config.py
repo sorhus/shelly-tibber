@@ -14,6 +14,7 @@ from unittest.mock import patch
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from config import load_config, apply_defaults, validate_config, get_config
+from exceptions import ConfigFileNotFoundError, ConfigValidationError
 
 
 class TestLoadConfig(unittest.TestCase):
@@ -22,7 +23,7 @@ class TestLoadConfig(unittest.TestCase):
     def test_load_config_file_not_found(self):
         """Test error when config file doesn't exist"""
         with patch('config.os.path.exists', return_value=False):
-            with self.assertRaises(FileNotFoundError):
+            with self.assertRaises(ConfigFileNotFoundError):
                 load_config()
 
     def test_load_config_invalid_json(self):
@@ -111,7 +112,7 @@ class TestValidateConfig(unittest.TestCase):
             'shelly': {'host': '192.168.1.1'}
         }
         
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ConfigValidationError) as context:
             validate_config(config)
         
         self.assertIn('tibber.token', str(context.exception))
@@ -123,7 +124,7 @@ class TestValidateConfig(unittest.TestCase):
             'shelly': {'host': '192.168.1.1'}
         }
         
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ConfigValidationError) as context:
             validate_config(config, require_home_id=True)
         
         self.assertIn('tibber.home_id', str(context.exception))
@@ -145,7 +146,7 @@ class TestValidateConfig(unittest.TestCase):
             'shelly': {'host': '192.168.1.1'}
         }
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConfigValidationError):
             validate_config(config)
 
     def test_validate_success(self):
