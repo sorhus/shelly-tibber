@@ -29,15 +29,22 @@ logger = logging.getLogger(__name__)
 class CheapestHoursScheduler:
     """Main orchestrator for scheduling cheapest hours"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], dry_run: bool = False):
         self.config = config
+        self.dry_run = dry_run
         self.price_analyzer = PriceAnalyzer(config)
         self.file_manager = FileManager()
         self.schedule_manager = ShellyScheduleManager(
             shelly_host=config['shelly']['host'],
             timeout=config['shelly']['timeout'],
-            debug=config['tibber']['debug']
+            debug=config['tibber']['debug'],
+            dry_run=dry_run
         )
+        
+        if dry_run:
+            logger.info("=" * 60)
+            logger.info("DRY RUN MODE - No changes will be made to Shelly device")
+            logger.info("=" * 60)
         
     def clear_previous_run(self, date: str) -> None:
         """Clear all output files from a previous run for the given date"""
@@ -220,7 +227,7 @@ class CheapestHoursScheduler:
             )
             logger.info(f"Created {len(schedule_ids)} schedules for weekday {cron_weekday}")
             
-            # Step 6: Save success file
+            # Step 6: Save success file (skip in dry-run mode)
             today = datetime.now().strftime('%Y-%m-%d')
             result_data = {
                 'date': today,
@@ -229,11 +236,26 @@ class CheapestHoursScheduler:
                 'cheapest_hours': cheapest_hours,
                 'schedule_ids': schedule_ids,
                 'consecutive_blocks': [(start.isoformat(), end.isoformat()) for start, end in consecutive_blocks],
-                'created_at': datetime.now().isoformat()
+                'created_at': datetime.now().isoformat(),
+                'dry_run': self.dry_run
             }
             
-            self.file_manager.write_result_file(today, result_data)
-            self.file_manager.write_success_file(today)
+            if self.dry_run:
+                logger.info("=" * 60)
+                logger.info("DRY RUN SUMMARY")
+                logger.info("=" * 60)
+                logger.info(f"Target date: {dt.strftime('%Y-%m-%d')} ({dt.strftime('%A')})")
+                logger.info(f"Cheapest hours found: {len(cheapest_hours)}")
+                logger.info(f"Consecutive blocks: {len(consecutive_blocks)}")
+                for i, (start, end) in enumerate(consecutive_blocks):
+                    duration = (end - start).total_seconds() / 3600
+                    logger.info(f"  Block {i+1}: {start.strftime('%H:%M')} - {end.strftime('%H:%M')} ({duration:.0f}h)")
+                logger.info(f"Schedules that would be created: {len(schedule_ids)}")
+                logger.info("=" * 60)
+                logger.info("[DRY RUN] Skipping success file write")
+            else:
+                self.file_manager.write_result_file(today, result_data)
+                self.file_manager.write_success_file(today)
             
             logger.info("Successfully completed scheduling process")
             return True
@@ -244,6 +266,21 @@ class CheapestHoursScheduler:
 
 def main():
     """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description='Schedule electricity usage during cheapest hours'
+    )
+    parser.add_argument(
+        '--dry-run', '-n',
+        action='store_true',
+        help='Run without making changes to Shelly device (fetch prices, calculate schedules, but skip device API calls)'
+    )
+    args = parser.parse_args()
+    
+    # Also check environment variable for dry-run
+    dry_run = args.dry_run or os.getenv('DRY_RUN', 'false').lower() == 'true'
+    
     try:
         # Load configuration
         config = get_config()
@@ -254,7 +291,7 @@ def main():
             logger.debug("Debug logging enabled")
         
         # Create scheduler and run
-        scheduler = CheapestHoursScheduler(config)
+        scheduler = CheapestHoursScheduler(config, dry_run=dry_run)
         success = scheduler.run()
         
         if success:

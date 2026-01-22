@@ -36,12 +36,14 @@ class ScheduleJob:
 class ShellyScheduleManager:
     """Manages schedules on Shelly devices"""
     
-    def __init__(self, shelly_host: str, timeout: int = 10, debug: bool = False):
+    def __init__(self, shelly_host: str, timeout: int = 10, debug: bool = False, dry_run: bool = False):
         self.shelly_host = shelly_host
         self.timeout = timeout
         self.debug = debug
+        self.dry_run = dry_run
         self.base_url = f"http://{shelly_host}/rpc"
         self.logger = logging.getLogger(__name__)
+        self._dry_run_schedule_counter = 0  # For generating fake schedule IDs in dry-run mode
     
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -202,6 +204,10 @@ class ShellyScheduleManager:
         """List all existing schedules"""
         self.logger.info("Fetching existing schedules...")
         
+        if self.dry_run:
+            self.logger.info("[DRY RUN] Would fetch schedules from device - returning empty list")
+            return []
+        
         result = self._make_request("Schedule.List")
         jobs = result.get("result", {}).get("jobs", [])
         
@@ -220,6 +226,13 @@ class ShellyScheduleManager:
     def create_schedule(self, timespec: str, calls: List[Dict[str, Any]], enable: bool = True) -> int:
         """Create a new schedule"""
         self.logger.info(f"Creating schedule: {timespec}")
+        
+        if self.dry_run:
+            self._dry_run_schedule_counter += 1
+            fake_id = self._dry_run_schedule_counter
+            action = "ON" if calls and calls[0].get("params", {}).get("on") else "OFF"
+            self.logger.info(f"[DRY RUN] Would create schedule (fake ID: {fake_id}): {timespec} -> {action}")
+            return fake_id
         
         try:
             params = {
@@ -257,6 +270,10 @@ class ShellyScheduleManager:
         """Delete a specific schedule"""
         self.logger.info(f"Deleting schedule {schedule_id}")
         
+        if self.dry_run:
+            self.logger.info(f"[DRY RUN] Would delete schedule {schedule_id}")
+            return 0
+        
         try:
             params = {"id": schedule_id}
             result = self._make_request("Schedule.Delete", params)
@@ -274,6 +291,10 @@ class ShellyScheduleManager:
     def delete_all_schedules(self) -> int:
         """Delete all schedules"""
         self.logger.info("Deleting all schedules")
+        
+        if self.dry_run:
+            self.logger.info("[DRY RUN] Would delete all schedules")
+            return 0
         
         try:
             result = self._make_request("Schedule.DeleteAll")
@@ -470,6 +491,10 @@ class ShellyScheduleManager:
     
     def test_connection(self) -> bool:
         """Test connection to Shelly device"""
+        if self.dry_run:
+            self.logger.info("[DRY RUN] Would test connection to Shelly device - skipping")
+            return True
+        
         try:
             # Try to get device info
             result = self._make_request("Shelly.GetDeviceInfo")
@@ -482,4 +507,4 @@ class ShellyScheduleManager:
             
         except (ShellyConnectionError, ShellyTimeoutError, ShellyRPCError) as e:
             self.logger.error(f"Connection test failed: {str(e)}")
-            return False 
+            return False

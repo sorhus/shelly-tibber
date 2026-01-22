@@ -260,5 +260,56 @@ class TestTestConnection(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestDryRunMode(unittest.TestCase):
+    """Test dry-run mode functionality"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False, dry_run=True)
+        self.manager.logger = Mock()
+
+    def test_dry_run_init(self):
+        """Test dry-run mode is stored"""
+        self.assertTrue(self.manager.dry_run)
+
+    def test_dry_run_list_schedules_returns_empty(self):
+        """Test list_schedules returns empty list in dry-run mode"""
+        result = self.manager.list_schedules()
+        self.assertEqual(result, [])
+
+    def test_dry_run_create_schedule_returns_fake_id(self):
+        """Test create_schedule returns fake IDs in dry-run mode"""
+        id1 = self.manager.create_schedule("0 0 10 * * 1", [{"method": "Switch.Set", "params": {"on": True}}])
+        id2 = self.manager.create_schedule("0 0 11 * * 1", [{"method": "Switch.Set", "params": {"on": False}}])
+        
+        self.assertEqual(id1, 1)
+        self.assertEqual(id2, 2)
+
+    def test_dry_run_delete_schedule_succeeds(self):
+        """Test delete_schedule succeeds in dry-run mode"""
+        result = self.manager.delete_schedule(123)
+        self.assertEqual(result, 0)
+
+    def test_dry_run_delete_all_schedules_succeeds(self):
+        """Test delete_all_schedules succeeds in dry-run mode"""
+        result = self.manager.delete_all_schedules()
+        self.assertEqual(result, 0)
+
+    def test_dry_run_test_connection_returns_true(self):
+        """Test test_connection returns True in dry-run mode without making request"""
+        result = self.manager.test_connection()
+        self.assertTrue(result)
+
+    def test_dry_run_no_http_requests(self):
+        """Test no HTTP requests are made in dry-run mode"""
+        with patch('shelly_schedule.requests.post') as mock_post:
+            self.manager.list_schedules()
+            self.manager.create_schedule("0 0 10 * * 1", [])
+            self.manager.delete_schedule(1)
+            self.manager.delete_all_schedules()
+            self.manager.test_connection()
+            
+            mock_post.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
