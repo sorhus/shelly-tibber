@@ -9,7 +9,14 @@ import json
 import tempfile
 from unittest.mock import patch
 
-from src.config import load_config, apply_defaults, validate_config, get_config
+from src.config import (
+    load_config,
+    apply_defaults,
+    validate_config,
+    get_config,
+    apply_env_overrides,
+    PLACEHOLDER_VALUES,
+)
 from src.exceptions import ConfigFileNotFoundError, ConfigValidationError
 
 
@@ -183,6 +190,155 @@ class TestGetConfig(unittest.TestCase):
                     self.assertEqual(config['tibber']['token'], 'test-token')
         finally:
             os.unlink(temp_path)
+
+
+class TestEnvOverrides(unittest.TestCase):
+    """Test environment variable overrides"""
+
+    def test_env_override_string(self):
+        """Test string environment variable override"""
+        config = {
+            'tibber': {'token': 'file-token'},
+            'shelly': {}
+        }
+        
+        with patch.dict(os.environ, {'TIBBER_TOKEN': 'env-token'}):
+            result = apply_env_overrides(config)
+            self.assertEqual(result['tibber']['token'], 'env-token')
+
+    def test_env_override_integer(self):
+        """Test integer environment variable override"""
+        config = {
+            'tibber': {},
+            'shelly': {'timeout': 10}
+        }
+        
+        with patch.dict(os.environ, {'SHELLY_TIMEOUT': '30'}):
+            result = apply_env_overrides(config)
+            self.assertEqual(result['shelly']['timeout'], 30)
+
+    def test_env_override_boolean_true(self):
+        """Test boolean environment variable override (true)"""
+        config = {
+            'tibber': {'debug': False},
+            'shelly': {}
+        }
+        
+        with patch.dict(os.environ, {'TIBBER_DEBUG': 'true'}):
+            result = apply_env_overrides(config)
+            self.assertTrue(result['tibber']['debug'])
+
+    def test_env_override_boolean_false(self):
+        """Test boolean environment variable override (false)"""
+        config = {
+            'tibber': {'debug': True},
+            'shelly': {}
+        }
+        
+        with patch.dict(os.environ, {'TIBBER_DEBUG': 'false'}):
+            result = apply_env_overrides(config)
+            self.assertFalse(result['tibber']['debug'])
+
+    def test_env_override_creates_section(self):
+        """Test that env override creates missing section"""
+        config = {}
+        
+        with patch.dict(os.environ, {'SHELLY_HOST': '10.0.0.1'}):
+            result = apply_env_overrides(config)
+            self.assertEqual(result['shelly']['host'], '10.0.0.1')
+
+
+class TestPlaceholderValidation(unittest.TestCase):
+    """Test placeholder value detection"""
+
+    def test_placeholder_token_rejected(self):
+        """Test that placeholder token is rejected"""
+        config = {
+            'tibber': {'token': 'YOUR_TIBBER_API_TOKEN_HERE', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1'}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('placeholder', str(context.exception.details))
+
+    def test_placeholder_host_rejected(self):
+        """Test that placeholder host is rejected"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': 'YOUR_SHELLY_IP_HERE'}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('placeholder', str(context.exception.details))
+
+
+class TestNumericValidation(unittest.TestCase):
+    """Test numeric range validation"""
+
+    def test_timeout_too_low(self):
+        """Test timeout below minimum is rejected"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1', 'timeout': 0}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('timeout', str(context.exception.details))
+
+    def test_timeout_too_high(self):
+        """Test timeout above maximum is rejected"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1', 'timeout': 500}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('timeout', str(context.exception.details))
+
+    def test_num_hours_too_low(self):
+        """Test num_cheapest_hours below minimum is rejected"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1'},
+            'analysis': {'num_cheapest_hours': 0}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('num_cheapest_hours', str(context.exception.details))
+
+    def test_num_hours_too_high(self):
+        """Test num_cheapest_hours above maximum is rejected"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1'},
+            'analysis': {'num_cheapest_hours': 30}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('num_cheapest_hours', str(context.exception.details))
+
+    def test_valid_numeric_values(self):
+        """Test valid numeric values pass validation"""
+        config = {
+            'tibber': {'token': 'valid-token', 'home_id': 'home123'},
+            'shelly': {'host': '192.168.1.1', 'timeout': 30},
+            'analysis': {'num_cheapest_hours': 10}
+        }
+        
+        # Should not raise
+        validate_config(config)
 
 
 if __name__ == '__main__':

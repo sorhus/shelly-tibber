@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Configuration Management Module
-Handles loading configuration from config.json file
+Handles loading configuration from config.json file with validation
 """
 
 import os
 import json
 import logging
-from typing import Dict, Any, Union, overload, Literal
+from typing import Dict, Any, List, Optional
 
 from src.models import AppConfig
 
@@ -18,6 +18,68 @@ from src.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Environment variable mappings (ENV_VAR -> config path)
+ENV_VAR_MAPPINGS = {
+    "TIBBER_TOKEN": ("tibber", "token"),
+    "TIBBER_HOME_ID": ("tibber", "home_id"),
+    "TIBBER_DEBUG": ("tibber", "debug"),
+    "SHELLY_HOST": ("shelly", "host"),
+    "SHELLY_TIMEOUT": ("shelly", "timeout"),
+    "SHELLY_USERNAME": ("shelly", "username"),
+    "SHELLY_PASSWORD": ("shelly", "password"),
+    "NUM_CHEAPEST_HOURS": ("analysis", "num_cheapest_hours"),
+    "CLEAR_OLD_SCHEDULES": ("scheduling", "clear_old_schedules"),
+}
+
+# Placeholder values that indicate unconfigured settings
+PLACEHOLDER_VALUES = {
+    "YOUR_TIBBER_API_TOKEN_HERE",
+    "YOUR_TIBBER_HOME_ID_HERE",
+    "YOUR_SHELLY_IP_HERE",
+}
+
+
+def _parse_env_value(value: str, field_path: tuple) -> Any:
+    """Parse environment variable string to the appropriate type"""
+    section, field = field_path
+    
+    # Boolean fields
+    if field in ("debug", "clear_old_schedules"):
+        return value.lower() in ("true", "1", "yes", "on")
+    
+    # Integer fields
+    if field in ("timeout", "num_cheapest_hours"):
+        try:
+            return int(value)
+        except ValueError:
+            raise ConfigValidationError(
+                f"Invalid integer value for {section}.{field}: {value}"
+            )
+    
+    return value
+
+
+def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Apply environment variable overrides to configuration.
+    
+    Environment variables take precedence over config file values.
+    Supported variables: TIBBER_TOKEN, TIBBER_HOME_ID, SHELLY_HOST, etc.
+    """
+    for env_var, config_path in ENV_VAR_MAPPINGS.items():
+        env_value = os.environ.get(env_var)
+        if env_value is not None:
+            section, field = config_path
+            
+            if section not in config:
+                config[section] = {}
+            
+            parsed_value = _parse_env_value(env_value, config_path)
+            config[section][field] = parsed_value
+            logger.debug(f"Applied environment override: {env_var} -> {section}.{field}")
+    
+    return config
 
 
 def load_config_dict() -> Dict[str, Any]:
@@ -86,33 +148,63 @@ def apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> None:
     """
-    Validate that required configuration values are present
+    Validate configuration values.
+    
+    Checks for:
+    - Required fields (tibber.token, tibber.home_id if required)
+    - Placeholder values that haven't been configured
+    - Basic type validation
     """
-    required_fields = [
-        ('tibber', 'token'),
-    ]
+    errors: List[str] = []
+    
+    # Check required fields
+    required_fields = [('tibber', 'token')]
     if require_home_id:
         required_fields.append(('tibber', 'home_id'))
     
-    missing_fields = []
     for section, field in required_fields:
-        if not config.get(section, {}).get(field):
-            missing_fields.append(f"{section}.{field}")
+        value = config.get(section, {}).get(field)
+        if not value:
+            errors.append(f"{section}.{field}: required field is missing")
+        elif isinstance(value, str) and value in PLACEHOLDER_VALUES:
+            errors.append(f"{section}.{field}: contains placeholder value - please configure")
     
-    if missing_fields:
+    # Check for placeholder values in other fields
+    shelly_host = config.get('shelly', {}).get('host', '')
+    if shelly_host in PLACEHOLDER_VALUES:
+        errors.append("shelly.host: contains placeholder value - please configure")
+    
+    # Validate numeric ranges
+    timeout = config.get('shelly', {}).get('timeout')
+    if timeout is not None:
+        if not isinstance(timeout, int) or timeout < 1 or timeout > 300:
+            errors.append("shelly.timeout: must be an integer between 1 and 300")
+    
+    num_hours = config.get('analysis', {}).get('num_cheapest_hours')
+    if num_hours is not None:
+        if not isinstance(num_hours, int) or num_hours < 1 or num_hours > 24:
+            errors.append("analysis.num_cheapest_hours: must be an integer between 1 and 24")
+    
+    if errors:
         raise ConfigValidationError(
-            f"Missing required configuration fields: {', '.join(missing_fields)}",
-            details={"missing_fields": missing_fields}
+            f"Configuration validation failed with {len(errors)} error(s)",
+            details={"errors": errors}
         )
 
 def get_config(require_home_id: bool = True) -> Dict[str, Any]:
     """
-    Get validated configuration with defaults applied (as dictionary)
+    Get validated configuration with defaults and environment overrides applied.
+    
+    Configuration is loaded in this order (later sources override earlier):
+    1. config.json file
+    2. Default values
+    3. Environment variables (TIBBER_TOKEN, SHELLY_HOST, etc.)
     
     For type-safe access, use get_typed_config() instead.
     """
     config = load_config_dict()
     config = apply_defaults(config)
+    config = apply_env_overrides(config)
     validate_config(config, require_home_id=require_home_id)
     return config
 
