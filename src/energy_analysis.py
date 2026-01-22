@@ -12,7 +12,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 
-from exceptions import (
+from src.exceptions import (
     TibberAPIError,
     HTTPRequestError,
     JSONParseError,

@@ -4,13 +4,8 @@ Unit tests for custom exceptions
 """
 
 import unittest
-import sys
-import os
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from exceptions import (
+from src.exceptions import (
     ShellyTibberError,
     ConfigurationError,
     ConfigFileNotFoundError,

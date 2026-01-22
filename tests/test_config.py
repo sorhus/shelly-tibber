@@ -4,17 +4,13 @@ Unit tests for configuration module
 """
 
 import unittest
-import sys
 import os
 import json
 import tempfile
 from unittest.mock import patch
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from config import load_config, apply_defaults, validate_config, get_config
-from exceptions import ConfigFileNotFoundError, ConfigValidationError
+from src.config import load_config, apply_defaults, validate_config, get_config
+from src.exceptions import ConfigFileNotFoundError, ConfigValidationError
 
 
 class TestLoadConfig(unittest.TestCase):
@@ -22,7 +18,7 @@ class TestLoadConfig(unittest.TestCase):
 
     def test_load_config_file_not_found(self):
         """Test error when config file doesn't exist"""
-        with patch('config.os.path.exists', return_value=False):
+        with patch('src.config.os.path.exists', return_value=False):
             with self.assertRaises(ConfigFileNotFoundError):
                 load_config()
 
@@ -33,7 +29,7 @@ class TestLoadConfig(unittest.TestCase):
             temp_path = f.name
         
         try:
-            with patch('config.os.path.exists', return_value=True):
+            with patch('src.config.os.path.exists', return_value=True):
                 with patch('builtins.open', return_value=open(temp_path)):
                     with self.assertRaises(Exception):
                         load_config()
@@ -53,7 +49,7 @@ class TestLoadConfig(unittest.TestCase):
         
         try:
             # Patch to use our temp file
-            with patch('config.os.path.exists', return_value=True):
+            with patch('src.config.os.path.exists', return_value=True):
                 with patch('builtins.open', return_value=open(temp_path)):
                     config = load_config()
                     self.assertEqual(config["tibber"]["token"], "test")
@@ -175,7 +171,7 @@ class TestGetConfig(unittest.TestCase):
             temp_path = f.name
         
         try:
-            with patch('config.os.path.exists', return_value=True):
+            with patch('src.config.os.path.exists', return_value=True):
                 with patch('builtins.open', return_value=open(temp_path)):
                     config = get_config()
                     

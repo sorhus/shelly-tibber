@@ -6,13 +6,8 @@ Unit tests for create_price_based_schedules method
 import unittest
 from unittest.mock import Mock, patch, call
 from datetime import datetime, timedelta
-import sys
-import os
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from shelly_schedule import ShellyScheduleManager
+from src.shelly_schedule import ShellyScheduleManager
 
 
 class TestCreatePriceBasedSchedules(unittest.TestCase):

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shelly-tibber"
+version = "1.0.0"
+description = "Schedule electricity usage during cheapest hours using Tibber prices and Shelly devices"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Sindre Sorhus"}
+]
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+shelly-tibber = "src.schedule_cheapest_hours:main"
+shelly-tibber-clear = "src.clear_schedules:main"
+shelly-tibber-list = "src.list_schedules:main"
+shelly-tibber-home-id = "src.get_home_id:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

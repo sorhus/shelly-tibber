@@ -4,15 +4,11 @@ Script to clear all schedules from Shelly device
 """
 
 import os
-import sys
 import logging
 from typing import Dict, Any
 
-# Add src directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from shelly_schedule import ShellyScheduleManager
-from config import get_config
+from src.shelly_schedule import ShellyScheduleManager
+from src.config import get_config
 
 # Configure logging
 logging.basicConfig(

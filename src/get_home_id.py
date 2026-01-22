@@ -6,12 +6,8 @@ Script to get available homes from Tibber API
 import requests
 import json
 import sys
-import os
 
-# Add src directory to path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from config import get_config
+from src.config import get_config
 
 def get_homes(token):
     """Get available homes from Tibber API"""

@@ -4,16 +4,11 @@ Unit tests for Shelly schedule module
 """
 
 import unittest
-import sys
-import os
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
 
-# Add src directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from shelly_schedule import ShellyScheduleManager, ScheduleJob
-from exceptions import ShellyConnectionError
+from src.shelly_schedule import ShellyScheduleManager, ScheduleJob
+from src.exceptions import ShellyConnectionError
 
 
 class TestShellyScheduleManagerInit(unittest.TestCase):
@@ -301,7 +296,7 @@ class TestDryRunMode(unittest.TestCase):
 
     def test_dry_run_no_http_requests(self):
         """Test no HTTP requests are made in dry-run mode"""
-        with patch('shelly_schedule.requests.post') as mock_post:
+        with patch('src.shelly_schedule.requests.post') as mock_post:
             self.manager.list_schedules()
             self.manager.create_schedule("0 0 10 * * 1", [])
             self.manager.delete_schedule(1)
