@@ -11,6 +11,14 @@ import logging
 from typing import Dict, List, Any
 from datetime import datetime, timezone
 
+from exceptions import (
+    TibberAPIError,
+    TibberDataNotAvailableError,
+    TibberHomeNotFoundError,
+    HTTPRequestError,
+    JSONParseError,
+)
+
 logger = logging.getLogger(__name__)
 
 class PriceAnalyzer:
@@ -72,7 +80,12 @@ class PriceAnalyzer:
             )
             
             if response.status_code != 200:
-                raise Exception(f"API request failed with code: {response.status_code}")
+                raise HTTPRequestError(
+                    f"Tibber API request failed",
+                    status_code=response.status_code,
+                    url="https://api.tibber.com/v1-beta/gql",
+                    details={"response_text": response.text[:500] if response.text else None}
+                )
                 
             self.debug_log("Received response from API")
             json_response = response.json()
@@ -88,9 +101,15 @@ class PriceAnalyzer:
             return json_response
             
         except requests.exceptions.RequestException as e:
-            raise Exception(f"HTTP request failed: {str(e)}")
+            raise HTTPRequestError(
+                f"HTTP request to Tibber API failed: {str(e)}",
+                url="https://api.tibber.com/v1-beta/gql"
+            )
         except json.JSONDecodeError as e:
-            raise Exception(f"Failed to parse API response: {str(e)}")
+            raise JSONParseError(
+                f"Failed to parse Tibber API response",
+                details={"error": str(e)}
+            )
             
     def parse_tibber_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Parse Tibber API response and extract prices"""
@@ -100,7 +119,10 @@ class PriceAnalyzer:
             homes = response["data"]["viewer"]["homes"]
             
             if not homes:
-                raise Exception("No homes found in API response")
+                raise TibberAPIError(
+                    "No homes found in Tibber account",
+                    details={"response": response}
+                )
                 
             # Find the home with the expected ID
             expected_home = None
@@ -111,11 +133,10 @@ class PriceAnalyzer:
                     
             if not expected_home:
                 available_homes = [{"id": home["id"], "address": home["address"]} for home in homes]
-                error_message = (
-                    f"Could not find home with ID: {self.home_id}\n"
-                    f"Available homes: {json.dumps(available_homes, indent=2)}"
+                raise TibberHomeNotFoundError(
+                    f"Could not find home with ID: {self.home_id}",
+                    details={"requested_home_id": self.home_id, "available_homes": available_homes}
                 )
-                raise Exception(error_message)
                 
             self.debug_log(f"Found correct home: {expected_home['address']['address1']}, {expected_home['address']['city']}")
             
@@ -128,23 +149,33 @@ class PriceAnalyzer:
             
             if prices is None:
                 self.debug_log("Tomorrow prices is None - not available yet")
-                raise Exception("No price data available for tomorrow")
+                raise TibberDataNotAvailableError(
+                    "Tomorrow's price data not available yet",
+                    details={"hint": "Tibber typically publishes tomorrow's prices around 13:00 CET"}
+                )
             
             if not isinstance(prices, list):
                 self.debug_log(f"Tomorrow prices is not a list: {type(prices)}")
-                raise Exception(f"Unexpected price data format: {type(prices)}")
+                raise TibberAPIError(
+                    f"Unexpected price data format: expected list, got {type(prices).__name__}",
+                    details={"actual_type": type(prices).__name__}
+                )
             
             if len(prices) == 0:
                 self.debug_log("Tomorrow prices is empty list")
-                raise Exception("No price data available for tomorrow")
+                raise TibberDataNotAvailableError(
+                    "Tomorrow's price data is empty",
+                    details={"hint": "Tibber returned an empty price list"}
+                )
                 
             self.debug_log(f"Found {len(prices)} price points")
             return prices
             
         except KeyError as e:
-            raise Exception(f"Failed to parse response: Missing key {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to parse response: {str(e)}")
+            raise TibberAPIError(
+                f"Unexpected Tibber API response structure: missing key {str(e)}",
+                details={"missing_key": str(e)}
+            )
             
     def get_cheapest_hours(self) -> List[Dict[str, Any]]:
         """Get the cheapest hours for tomorrow, considering price thresholds if enabled"""
@@ -210,6 +241,13 @@ class PriceAnalyzer:
             
             return cheapest_hours
             
+        except (TibberAPIError, TibberDataNotAvailableError, TibberHomeNotFoundError,
+                HTTPRequestError, JSONParseError):
+            # Re-raise our custom exceptions as-is
+            raise
         except Exception as e:
             logger.error(f"Failed to get cheapest hours: {str(e)}")
-            raise 
+            raise TibberAPIError(
+                f"Unexpected error fetching prices: {str(e)}",
+                details={"original_error": str(e)}
+            ) 

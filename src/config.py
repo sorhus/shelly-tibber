@@ -11,6 +11,12 @@ from typing import Dict, Any, Union, overload, Literal
 
 from models import AppConfig
 
+from exceptions import (
+    ConfigFileNotFoundError,
+    ConfigValidationError,
+    ConfigurationError,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,15 +27,26 @@ def load_config_dict() -> Dict[str, Any]:
     config_file = 'config.json'
     
     if not os.path.exists(config_file):
-        raise FileNotFoundError(f"Configuration file not found: {config_file}")
+        raise ConfigFileNotFoundError(
+            f"Configuration file not found: {config_file}",
+            details={"path": config_file}
+        )
     
     try:
         with open(config_file, 'r') as f:
             config = json.load(f)
         logger.info(f"Configuration loaded from {config_file}")
         return config
-    except (json.JSONDecodeError, IOError) as e:
-        raise Exception(f"Failed to load config from {config_file}: {e}")
+    except json.JSONDecodeError as e:
+        raise ConfigurationError(
+            f"Invalid JSON in config file: {config_file}",
+            details={"path": config_file, "error": str(e)}
+        )
+    except IOError as e:
+        raise ConfigurationError(
+            f"Failed to read config file: {config_file}",
+            details={"path": config_file, "error": str(e)}
+        )
 
 
 def load_config() -> Dict[str, Any]:
@@ -83,7 +100,10 @@ def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> Non
             missing_fields.append(f"{section}.{field}")
     
     if missing_fields:
-        raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
+        raise ConfigValidationError(
+            f"Missing required configuration fields: {', '.join(missing_fields)}",
+            details={"missing_fields": missing_fields}
+        )
 
 def get_config(require_home_id: bool = True) -> Dict[str, Any]:
     """

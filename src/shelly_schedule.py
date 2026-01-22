@@ -13,6 +13,14 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from exceptions import (
+    ShellyConnectionError,
+    ShellyTimeoutError,
+    ShellyRPCError,
+    ScheduleCreationError,
+    ScheduleDeletionError,
+)
+
 @dataclass
 class ScheduleJob:
     """Represents a Shelly schedule job"""
@@ -116,7 +124,13 @@ class ShellyScheduleManager:
                     log_data["rpc_error"] = safe_json_serialize(result["error"])
                     with open(log_filename, "w") as f:
                         json.dump(log_data, f, indent=2)
-                    raise Exception(f"RPC Error: {result['error']}")
+                    error_info = result["error"]
+                    raise ShellyRPCError(
+                        f"Shelly RPC error: {error_info}",
+                        method=method,
+                        error_code=error_info.get("code") if isinstance(error_info, dict) else None,
+                        details={"error": error_info}
+                    )
                 
                 # Write successful response to log file
                 with open(log_filename, "w") as f:
@@ -130,48 +144,78 @@ class ShellyScheduleManager:
                 
                 # Check for RPC errors even without logging
                 if result and "error" in result:
-                    raise Exception(f"RPC Error: {result['error']}")
+                    error_info = result["error"]
+                    raise ShellyRPCError(
+                        f"Shelly RPC error: {error_info}",
+                        method=method,
+                        error_code=error_info.get("code") if isinstance(error_info, dict) else None,
+                        details={"error": error_info}
+                    )
             
             return result.get("params", result) if result else None
             
+        except requests.exceptions.Timeout as e:
+            # Log exception if debug mode is enabled
+            if self.debug and log_data and log_filename:
+                log_data["exception"] = str(e)
+                with open(log_filename, "w") as f:
+                    json.dump(log_data, f, indent=2)
+            raise ShellyTimeoutError(
+                f"Shelly device request timed out after {self.timeout}s",
+                details={"host": self.shelly_host, "method": method, "timeout": self.timeout}
+            )
+        except requests.exceptions.ConnectionError as e:
+            # Log exception if debug mode is enabled
+            if self.debug and log_data and log_filename:
+                log_data["exception"] = str(e)
+                with open(log_filename, "w") as f:
+                    json.dump(log_data, f, indent=2)
+            raise ShellyConnectionError(
+                f"Cannot connect to Shelly device at {self.shelly_host}",
+                details={"host": self.shelly_host, "error": str(e)}
+            )
         except requests.exceptions.RequestException as e:
             # Log exception if debug mode is enabled
             if self.debug and log_data and log_filename:
                 log_data["exception"] = str(e)
                 with open(log_filename, "w") as f:
                     json.dump(log_data, f, indent=2)
-            raise Exception(f"Request failed: {str(e)}")
+            raise ShellyConnectionError(
+                f"Request to Shelly device failed: {str(e)}",
+                details={"host": self.shelly_host, "method": method, "error": str(e)}
+            )
+        except ShellyRPCError:
+            # Re-raise our custom exceptions
+            raise
         except Exception as e:
             # Log exception if debug mode is enabled
             if self.debug and log_data and log_filename:
                 log_data["exception"] = str(e)
                 with open(log_filename, "w") as f:
                     json.dump(log_data, f, indent=2)
-            raise Exception(f"Unexpected error: {str(e)}")
+            raise ShellyConnectionError(
+                f"Unexpected error communicating with Shelly: {str(e)}",
+                details={"host": self.shelly_host, "method": method, "error": str(e)}
+            )
     
     def list_schedules(self) -> List[ScheduleJob]:
         """List all existing schedules"""
         self.logger.info("Fetching existing schedules...")
         
-        try:
-            result = self._make_request("Schedule.List")
-            jobs = result.get("result", {}).get("jobs", [])
-            
-            schedule_jobs = []
-            for job in jobs:
-                schedule_jobs.append(ScheduleJob(
-                    id=job.get("id"),
-                    enable=job.get("enable", True),
-                    timespec=job.get("timespec", ""),
-                    calls=job.get("calls", [])
-                ))
-            
-            self.logger.info(f"Found {len(schedule_jobs)} existing schedules")
-            return schedule_jobs
-            
-        except Exception as e:
-            self.logger.error(f"Failed to list schedules: {str(e)}")
-            raise
+        result = self._make_request("Schedule.List")
+        jobs = result.get("result", {}).get("jobs", [])
+        
+        schedule_jobs = []
+        for job in jobs:
+            schedule_jobs.append(ScheduleJob(
+                id=job.get("id"),
+                enable=job.get("enable", True),
+                timespec=job.get("timespec", ""),
+                calls=job.get("calls", [])
+            ))
+        
+        self.logger.info(f"Found {len(schedule_jobs)} existing schedules")
+        return schedule_jobs
     
     def create_schedule(self, timespec: str, calls: List[Dict[str, Any]], enable: bool = True) -> int:
         """Create a new schedule"""
@@ -190,27 +234,24 @@ class ShellyScheduleManager:
             self.logger.info(f"Created schedule with ID: {schedule_id}")
             return schedule_id
             
-        except Exception as e:
-            self.logger.error(f"Failed to create schedule: {str(e)}")
-            raise
+        except (ShellyConnectionError, ShellyTimeoutError, ShellyRPCError) as e:
+            raise ScheduleCreationError(
+                f"Failed to create schedule: {str(e)}",
+                details={"timespec": timespec, "original_error": str(e)}
+            )
     
     def update_schedule(self, schedule_id: int, **kwargs) -> int:
         """Update an existing schedule"""
         self.logger.info(f"Updating schedule {schedule_id}")
         
-        try:
-            params = {"id": schedule_id}
-            params.update(kwargs)
-            
-            result = self._make_request("Schedule.Update", params)
-            revision = result.get("rev")
-            
-            self.logger.info(f"Updated schedule {schedule_id}, revision: {revision}")
-            return revision
-            
-        except Exception as e:
-            self.logger.error(f"Failed to update schedule {schedule_id}: {str(e)}")
-            raise
+        params = {"id": schedule_id}
+        params.update(kwargs)
+        
+        result = self._make_request("Schedule.Update", params)
+        revision = result.get("rev")
+        
+        self.logger.info(f"Updated schedule {schedule_id}, revision: {revision}")
+        return revision
     
     def delete_schedule(self, schedule_id: int) -> int:
         """Delete a specific schedule"""
@@ -224,9 +265,11 @@ class ShellyScheduleManager:
             self.logger.info(f"Deleted schedule {schedule_id}, revision: {revision}")
             return revision
             
-        except Exception as e:
-            self.logger.error(f"Failed to delete schedule {schedule_id}: {str(e)}")
-            raise
+        except (ShellyConnectionError, ShellyTimeoutError, ShellyRPCError) as e:
+            raise ScheduleDeletionError(
+                f"Failed to delete schedule {schedule_id}: {str(e)}",
+                details={"schedule_id": schedule_id, "original_error": str(e)}
+            )
     
     def delete_all_schedules(self) -> int:
         """Delete all schedules"""
@@ -239,9 +282,11 @@ class ShellyScheduleManager:
             self.logger.info(f"Deleted all schedules, revision: {revision}")
             return revision
             
-        except Exception as e:
-            self.logger.error(f"Failed to delete all schedules: {str(e)}")
-            raise
+        except (ShellyConnectionError, ShellyTimeoutError, ShellyRPCError) as e:
+            raise ScheduleDeletionError(
+                f"Failed to delete all schedules: {str(e)}",
+                details={"original_error": str(e)}
+            )
     
     def delete_schedules_for_weekdays(self, weekdays: List[int]) -> int:
         """Delete schedules that match specific weekdays
@@ -254,35 +299,30 @@ class ShellyScheduleManager:
         """
         self.logger.info(f"Deleting schedules for weekdays: {weekdays}")
         
-        try:
-            # Get all existing schedules
-            schedules = self.list_schedules()
-            
-            deleted_count = 0
-            for schedule in schedules:
-                # Parse the timespec to check if it matches our weekdays
-                # Timespec format: "0 minute hour * * weekday"
-                timespec_parts = schedule.timespec.split()
-                if len(timespec_parts) >= 6:
-                    schedule_weekdays = timespec_parts[5]
-                    
-                    # Check if any of the target weekdays match this schedule
-                    # Handle both single weekday (e.g., "1") and comma-separated (e.g., "1,2,3")
-                    schedule_weekday_list = schedule_weekdays.split(',')
-                    
-                    for target_weekday in weekdays:
-                        if str(target_weekday) in schedule_weekday_list:
-                            self.logger.info(f"Deleting schedule {schedule.id} (weekday {schedule_weekdays})")
-                            self.delete_schedule(schedule.id)
-                            deleted_count += 1
-                            break
-            
-            self.logger.info(f"Deleted {deleted_count} schedules for weekdays {weekdays}")
-            return deleted_count
-            
-        except Exception as e:
-            self.logger.error(f"Failed to delete schedules for weekdays {weekdays}: {str(e)}")
-            raise
+        # Get all existing schedules
+        schedules = self.list_schedules()
+        
+        deleted_count = 0
+        for schedule in schedules:
+            # Parse the timespec to check if it matches our weekdays
+            # Timespec format: "0 minute hour * * weekday"
+            timespec_parts = schedule.timespec.split()
+            if len(timespec_parts) >= 6:
+                schedule_weekdays = timespec_parts[5]
+                
+                # Check if any of the target weekdays match this schedule
+                # Handle both single weekday (e.g., "1") and comma-separated (e.g., "1,2,3")
+                schedule_weekday_list = schedule_weekdays.split(',')
+                
+                for target_weekday in weekdays:
+                    if str(target_weekday) in schedule_weekday_list:
+                        self.logger.info(f"Deleting schedule {schedule.id} (weekday {schedule_weekdays})")
+                        self.delete_schedule(schedule.id)
+                        deleted_count += 1
+                        break
+        
+        self.logger.info(f"Deleted {deleted_count} schedules for weekdays {weekdays}")
+        return deleted_count
     
     def create_switch_schedule(self, hour: int, minute: int = 0, switch_id: int = 0, 
                               turn_on: bool = True, days: str = "*", weekdays: Optional[List[int]] = None) -> int:
@@ -440,6 +480,6 @@ class ShellyScheduleManager:
             
             return True
             
-        except Exception as e:
+        except (ShellyConnectionError, ShellyTimeoutError, ShellyRPCError) as e:
             self.logger.error(f"Connection test failed: {str(e)}")
             return False 

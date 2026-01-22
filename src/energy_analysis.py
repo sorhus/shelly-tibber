@@ -12,6 +12,12 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 
+from exceptions import (
+    TibberAPIError,
+    HTTPRequestError,
+    JSONParseError,
+)
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -139,7 +145,12 @@ class EnergyAnalyzer:
             if response.status_code != 200:
                 logger.error(f"API request failed with code: {response.status_code}")
                 logger.error(f"Response: {response.text}")
-                raise Exception(f"API request failed with code: {response.status_code}")
+                raise HTTPRequestError(
+                    f"Tibber API request failed",
+                    status_code=response.status_code,
+                    url="https://api.tibber.com/v1-beta/gql",
+                    details={"response_text": response.text[:500] if response.text else None}
+                )
             
             # Parse JSON response
             try:
@@ -149,10 +160,16 @@ class EnergyAnalyzer:
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {str(e)}")
                 logger.error(f"Raw response: {response.text}")
-                raise Exception(f"Failed to parse JSON response: {str(e)}")
+                raise JSONParseError(
+                    f"Failed to parse Tibber API response",
+                    details={"error": str(e), "response_preview": response.text[:200] if response.text else None}
+                )
                 
         except requests.exceptions.RequestException as e:
-            raise Exception(f"HTTP request failed: {str(e)}")
+            raise HTTPRequestError(
+                f"HTTP request to Tibber API failed: {str(e)}",
+                url="https://api.tibber.com/v1-beta/gql"
+            )
     
     def parse_consumption_data(self, response: Dict[str, Any], start_date: str, end_date: str) -> List[EnergyUsage]:
         """Parse Tibber consumption response into EnergyUsage objects"""
@@ -161,7 +178,7 @@ class EnergyAnalyzer:
         try:
             # Check if response is None or empty
             if not response:
-                raise Exception("API response is empty or None")
+                raise TibberAPIError("API response is empty or None")
             
             # Log the response structure for debugging
             self.debug_log(f"Response keys: {list(response.keys()) if response else 'None'}")
@@ -170,39 +187,51 @@ class EnergyAnalyzer:
             if "errors" in response:
                 error_msg = f"GraphQL errors: {response['errors']}"
                 logger.error(error_msg)
-                raise Exception(error_msg)
+                raise TibberAPIError(error_msg, details={"errors": response["errors"]})
             
             # Check if data exists
             if "data" not in response:
                 logger.error(f"Unexpected response structure: {response}")
-                raise Exception("Response missing 'data' field")
+                raise TibberAPIError(
+                    "Unexpected Tibber API response structure",
+                    details={"missing_field": "data"}
+                )
             
             data = response["data"]
             if not data:
-                raise Exception("Response data is empty")
+                raise TibberAPIError("Response data is empty")
             
             # Check if viewer exists
             if "viewer" not in data:
                 logger.error(f"Response data missing 'viewer': {data}")
-                raise Exception("Response missing 'viewer' field")
+                raise TibberAPIError(
+                    "Unexpected Tibber API response structure",
+                    details={"missing_field": "viewer"}
+                )
             
             viewer = data["viewer"]
             if not viewer:
-                raise Exception("Viewer data is empty")
+                raise TibberAPIError("Viewer data is empty")
             
             # Check if home exists
             if "home" not in viewer:
                 logger.error(f"Viewer data missing 'home': {viewer}")
-                raise Exception("Response missing 'home' field")
+                raise TibberAPIError(
+                    "Unexpected Tibber API response structure",
+                    details={"missing_field": "home"}
+                )
             
             home = viewer["home"]
             if not home:
-                raise Exception("Home data is empty")
+                raise TibberAPIError("Home data is empty")
             
             # Check if consumption exists
             if "consumption" not in home:
                 logger.error(f"Home data missing 'consumption': {home}")
-                raise Exception("Response missing 'consumption' field")
+                raise TibberAPIError(
+                    "Unexpected Tibber API response structure",
+                    details={"missing_field": "consumption"}
+                )
             
             consumption = home["consumption"]
             if not consumption:
@@ -212,7 +241,10 @@ class EnergyAnalyzer:
             # Check if nodes exist
             if "nodes" not in consumption:
                 logger.error(f"Consumption data missing 'nodes': {consumption}")
-                raise Exception("Response missing 'nodes' field")
+                raise TibberAPIError(
+                    "Unexpected Tibber API response structure",
+                    details={"missing_field": "nodes"}
+                )
             
             consumption_nodes = consumption["nodes"]
             if not consumption_nodes:
@@ -271,12 +303,21 @@ class EnergyAnalyzer:
         except KeyError as e:
             logger.error(f"Missing key in response: {str(e)}")
             logger.error(f"Response structure: {response}")
-            raise Exception(f"Failed to parse consumption response: Missing key {str(e)}")
+            raise TibberAPIError(
+                f"Unexpected Tibber API response structure",
+                details={"missing_key": str(e)}
+            )
+        except TibberAPIError:
+            # Re-raise our custom exceptions
+            raise
         except Exception as e:
             logger.error(f"Failed to parse consumption response: {str(e)}")
             if response:
                 logger.error(f"Response: {json.dumps(response, indent=2)}")
-            raise Exception(f"Failed to parse consumption response: {str(e)}")
+            raise TibberAPIError(
+                f"Failed to parse consumption response: {str(e)}",
+                details={"original_error": str(e)}
+            )
     
     def mark_scheduled_hours(self, energy_usage: List[EnergyUsage], output_data: List[Dict[str, Any]]) -> List[EnergyUsage]:
         """Mark which hours were scheduled based on output data"""
