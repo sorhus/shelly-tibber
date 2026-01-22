@@ -20,10 +20,9 @@ class TestPriceAnalyzerInit(unittest.TestCase):
                 'home_id': 'home-123',
                 'debug': False
             },
-            'analysis': {
+            'scheduling': {
                 'num_cheapest_hours': 5
-            },
-            'scheduling': {}
+            }
         }
 
     def test_init_stores_config(self):
@@ -46,10 +45,9 @@ class TestParseTibberResponse(unittest.TestCase):
                 'home_id': 'home-123',
                 'debug': False
             },
-            'analysis': {
+            'scheduling': {
                 'num_cheapest_hours': 5
-            },
-            'scheduling': {}
+            }
         }
         self.analyzer = PriceAnalyzer(self.config)
 
@@ -183,10 +181,9 @@ class TestGetCheapestHours(unittest.TestCase):
                 'home_id': 'home-123',
                 'debug': False
             },
-            'analysis': {
+            'scheduling': {
                 'num_cheapest_hours': 3
-            },
-            'scheduling': {}
+            }
         }
         self.analyzer = PriceAnalyzer(self.config)
 
@@ -226,10 +223,8 @@ class TestPriceThreshold(unittest.TestCase):
                 'home_id': 'home-123',
                 'debug': False
             },
-            'analysis': {
-                'num_cheapest_hours': 2
-            },
             'scheduling': {
+                'num_cheapest_hours': 2,
                 'price_threshold': {
                     'enabled': True,
                     'monthly_thresholds': {

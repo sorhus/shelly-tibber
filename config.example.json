@@ -1,5 +1,5 @@
 {
-  "_comment": "Required: tibber.token, tibber.home_id, shelly.host, analysis.num_cheapest_hours. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.clear_old_schedules, scheduling.price_threshold, retry.",
+  "_comment": "Required: tibber.token, tibber.home_id, shelly.host. Optional: tibber.debug, shelly.timeout, shelly.username, shelly.password, scheduling.num_cheapest_hours, scheduling.clear_old_schedules, scheduling.price_threshold, retry.",
   "tibber": {
     "token": "YOUR_TIBBER_API_TOKEN_HERE",
     "home_id": "YOUR_TIBBER_HOME_ID_HERE",
@@ -11,10 +11,8 @@
     "username": "",
     "password": ""
   },
-  "analysis": {
-    "num_cheapest_hours": 10
-  },
   "scheduling": {
+    "num_cheapest_hours": 10,
     "clear_old_schedules": false,
     "price_threshold": {
       "enabled": false,
@@ -43,4 +41,4 @@
     "backoff_factor": 2.0,
     "max_delay": 60.0
   }
-} 
+}

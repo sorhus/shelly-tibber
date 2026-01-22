@@ -2,208 +2,49 @@
 
 Automatically schedule your Shelly Pro 1 switch to turn on during the cheapest electricity hours using Tibber API data.
 
+## Features
+
+- **Automatic Scheduling**: Fetches tomorrow's electricity prices from Tibber and schedules your Shelly device to run during the cheapest hours
+- **Price Threshold Mode**: Optionally schedule any hour below a configurable price threshold
+- **Dry-Run Mode**: Test scheduling logic without making actual changes to your device
+- **Retry Logic**: Automatic retry with exponential backoff for network requests
+- **Health Monitoring**: Track scheduler status and check system health
+- **Environment Variable Support**: Override config values via environment variables
+- **Structured Logging**: JSON-formatted logs with correlation IDs for debugging
+
 ## Quick Start
 
-### Run Daily Scheduling
+### 1. Configure
+
+```bash
+cp config.example.json config.json
+# Edit config.json with your Tibber token, home ID, and Shelly IP
+```
+
+### 2. Get Your Tibber Home ID
+
+```bash
+./scripts/dev/get_home_id.sh
+```
+
+### 3. Run Daily Scheduling
+
 ```bash
 ./scripts/run_daily.sh
 ```
 
-The scheduler automatically adds weekday specifications to all schedules, so they only run on the specific day they're meant for. This means you don't need to delete old schedules unless you want to - they'll simply skip execution on non-matching days.
+### 4. Set Up Cron Job
 
-### Run Tests
+Add to your crontab to run daily at 23:05:
 ```bash
-./scripts/dev/run_tests.sh
+5 23 * * * cd /path/to/shelly-tibber && ./scripts/run_daily.sh
 ```
-
-### Clear Schedules
-```bash
-./scripts/dev/clear_schedules.sh
-```
-
-### List Schedules
-```bash
-./scripts/dev/list_schedules.sh
-```
-
-## Docker Setup
-
-### Files Structure
-```
-├── Dockerfile.python              # Python Docker image
-├── scripts/                       # Shell scripts for different operations
-│   ├── run_daily.sh              # Daily scheduling script
-│   └── dev/                      # Development scripts
-│       ├── clear_schedules.sh    # Clear Shelly schedules
-│       ├── list_schedules.sh     # List Shelly schedules
-│       ├── get_home_id.sh        # Get Tibber home ID
-│       └── run_tests.sh          # Run all unit tests
-├── src/                          # Python source code
-│   ├── schedule_cheapest_hours.py # Main scheduling script
-│   ├── price_analysis.py         # Price analysis logic
-│   ├── file_io.py               # File operations
-│   └── shelly_schedule.py       # Shelly API integration
-├── tests/                        # Test files
-├── requirements.txt              # Python dependencies
-├── output/                       # Analysis results (mounted volume)
-└── logs/                         # Log files (mounted volume)
-```
-
-### Docker Image
-- **Base**: Python 3.11-slim
-- **Dependencies**: requests library
-- **Tools**: curl, jq for debugging
-- **Working Directory**: `/app`
-
-## Usage
-
-### 1. Run Daily Scheduling
-```bash
-# Using the convenience script
-./scripts/run_daily.sh
-
-# Or manually with Docker
-docker build -f Dockerfile.python -t shelly-tibber .
-docker run --rm \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-tibber
-```
-
-### 2. Run Tests
-```bash
-# Using the convenience script
-./scripts/dev/run_tests.sh
-
-# Or manually with Docker
-docker build -f Dockerfile.python -t shelly-tibber .
-docker run --rm \
-  -v $(pwd)/tests:/app/tests \
-  -v $(pwd)/src:/app/src \
-  -v $(pwd)/output:/app/output \
-  shelly-tibber python -m pytest tests/ -v
-```
-
-### 3. Interactive Shell
-```bash
-# Get a shell in the container
-docker run --rm -it \
-  -v $(pwd):/app \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-tibber bash
-```
-
-## Weekday-Based Scheduling
-
-The scheduler automatically creates schedules with weekday specifications (e.g., Monday, Tuesday, etc.). This means:
-
-- **No Schedule Conflicts**: Each schedule only runs on its designated day of the week
-- **Accumulate Schedules**: You can run the scheduler multiple days in a row to build up schedules for different days
-- **No Need to Clear**: Old schedules automatically skip execution when it's not their day
-
-### Example:
-1. Run on Monday evening → Creates schedules for Tuesday (weekday=Tuesday)
-2. Run on Tuesday evening → Creates schedules for Wednesday (weekday=Wednesday)
-3. Both sets of schedules coexist on the Shelly device
-4. On Tuesday, only Tuesday's schedules run
-5. On Wednesday, only Wednesday's schedules run
-
-### Midnight Crossing Behavior
-
-The system intelligently handles schedules that cross midnight:
-
-**Scenario:** Tuesday 23:00 is cheap, Wednesday 00:00 is also cheap
-1. **Monday evening** (scheduling for Tuesday):
-   - Creates: ON at 23:00 Tuesday, OFF at 00:00 Wednesday
-2. **Tuesday evening** (scheduling for Wednesday):
-   - Detects 00:00 is in cheapest hours
-   - **Removes the OFF at 00:00 Wednesday** (from yesterday's schedule)
-   - Creates: ON at 00:00 Wednesday, OFF at 01:00 Wednesday
-3. **Result**: Device stays on continuously from 23:00 Tuesday through 01:00 Wednesday (no flicker!)
-
-This ensures seamless operation across midnight when consecutive hours are cheap.
-
-### Clearing Old Schedules (Optional)
-If you want to clean up old schedules, set `"clear_old_schedules": true` in your `config.json`. This will delete schedules for **yesterday** and the **day before yesterday** only, keeping today's and future schedules intact:
-
-```json
-{
-  "scheduling": {
-    "clear_old_schedules": true  // <--- Enable cleanup
-  }
-}
-```
-
-**Note:** By default, this is `false`, so old schedules are kept. When enabled, only schedules from the past 2 days are removed, preserving schedules for today and any future days.
-
-### Example Cleanup Scenario
-
-Running on **Wednesday evening** with `"clear_old_schedules": true`:
-- ✅ **Keeps**: Wednesday's schedules (today)
-- ✅ **Keeps**: Any future schedules (if they exist)
-- ❌ **Deletes**: Tuesday's schedules (yesterday)
-- ❌ **Deletes**: Monday's schedules (day before yesterday)
-
-This ensures your Shelly device stays clean without accidentally removing schedules that haven't run yet.
-
-## Price Threshold Mode
-
-Instead of scheduling only the N cheapest hours, you can set a price threshold per month. Any hour with a price **below** the threshold will be scheduled:
-
-```json
-{
-  "scheduling": {
-    "price_threshold": {
-      "enabled": true,
-      "monthly_thresholds": {
-        "1": 0.50,   // January: schedule hours with spot price < 0.50 SEK/kWh
-        "2": 0.50,   // February
-        "3": 0.60,   // March
-        "4": 0.70,   // April
-        "5": 0.80,   // May
-        "6": 0.90,   // June (summer, higher threshold)
-        "7": 0.90,   // July
-        "8": 0.80,   // August
-        "9": 0.70,   // September
-        "10": 0.60,  // October
-        "11": 0.55,  // November
-        "12": 0.50   // December (winter, lower threshold)
-      }
-    }
-  }
-}
-```
-
-### How It Works:
-1. **Always schedules the N cheapest hours** (e.g., 10 cheapest)
-2. **Additionally schedules any other hours below the threshold**
-3. Combines them (removes duplicates)
-
-**Example** with `num_cheapest_hours: 10` and threshold `0.55 SEK/kWh` (spot price):
-- Top 10 cheapest (by total price): hours with spot prices 0.45, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.64
-- Other hours with spot price below 0.55: 0.51 (hour 15), 0.53 (hour 20)
-- **Result**: 12 hours scheduled (10 cheapest + 2 extras with spot < 0.55)
-
-**Benefits:**
-- ✅ You always get your top N cheapest hours
-- ✅ Plus any other cheap hours you don't want to miss
-- ✅ If all 24 hours are below threshold → Device runs 24/7
-
-### What Does the Threshold Compare Against?
-The threshold is compared against the **spot price only** (the `energy` field from Tibber API).
-
-**Why spot price?**
-- ✅ Spot price is the variable component that reflects market conditions
-- ✅ Energy tax, grid fees, and VAT are relatively fixed costs
-- ✅ Makes it easier to set thresholds based on market prices
-
-So if the threshold is `0.50 SEK/kWh`, any hour with a **spot price** below 0.50 will be scheduled (in addition to your N cheapest hours). Your actual total cost per kWh will be higher due to energy tax, grid fees, and VAT.
 
 ## Configuration
 
 ### Configuration File
-The application uses `config.json` for all configuration:
+
+Create `config.json` from the example:
 
 ```json
 {
@@ -213,75 +54,259 @@ The application uses `config.json` for all configuration:
     "debug": false
   },
   "shelly": {
-    "host": "YOUR_SHELLY_IP_HERE",
+    "host": "192.168.1.100",
+    "timeout": 10,
     "username": "",
     "password": ""
   },
-  "analysis": {
-    "num_cheapest_hours": 10        // <--- Configurable number of hours
-  },
   "scheduling": {
-    "clear_old_schedules": false,   // <--- Set to true to clean up old schedules
+    "num_cheapest_hours": 10,
+    "clear_old_schedules": false,
     "price_threshold": {
-      "enabled": false,             // <--- Enable price threshold mode
-      "monthly_thresholds": {       // <--- Prices per month (SEK/kWh, incl. all taxes/fees)
-        "1": 0.50,                  // January
-        "2": 0.50,                  // February
-        // ... etc for all 12 months
+      "enabled": false,
+      "monthly_thresholds": {
+        "1": 0.50, "2": 0.50, "3": 0.50, "4": 0.20,
+        "5": 0.10, "6": 0.10, "7": 0.10, "8": 0.10,
+        "9": 0.10, "10": 0.20, "11": 0.50, "12": 0.50
+      }
+    }
+  },
+  "retry": {
+    "enabled": true,
+    "max_attempts": 3,
+    "initial_delay": 1.0,
+    "backoff_factor": 2.0,
+    "max_delay": 60.0
+  }
+}
+```
+
+### Environment Variable Overrides
+
+Configuration values can be overridden via environment variables:
+
+| Environment Variable | Config Path | Type |
+|---------------------|-------------|------|
+| `TIBBER_TOKEN` | `tibber.token` | string |
+| `TIBBER_HOME_ID` | `tibber.home_id` | string |
+| `TIBBER_DEBUG` | `tibber.debug` | boolean |
+| `SHELLY_HOST` | `shelly.host` | string |
+| `SHELLY_TIMEOUT` | `shelly.timeout` | integer |
+| `SHELLY_USERNAME` | `shelly.username` | string |
+| `SHELLY_PASSWORD` | `shelly.password` | string |
+| `NUM_CHEAPEST_HOURS` | `scheduling.num_cheapest_hours` | integer |
+| `CLEAR_OLD_SCHEDULES` | `scheduling.clear_old_schedules` | boolean |
+
+Example:
+```bash
+TIBBER_TOKEN=my-token SHELLY_HOST=10.0.0.50 ./scripts/run_daily.sh
+```
+
+### Configuration Validation
+
+The application validates configuration on startup:
+- **Required fields**: `tibber.token`, `tibber.home_id`, `shelly.host`
+- **Placeholder detection**: Rejects unconfigured placeholder values
+- **Range validation**: `timeout` (1-300), `num_cheapest_hours` (1-24)
+- **Defaults**: `num_cheapest_hours` defaults to 10, `timeout` defaults to 10
+
+## Dry-Run Mode
+
+Test the scheduling logic without making actual changes to your Shelly device:
+
+```bash
+# Using Docker
+docker run --rm \
+  -v $(pwd)/config.json:/app/config.json:ro \
+  shelly-tibber python -m src.schedule_cheapest_hours --dry-run
+
+# Output shows what would happen without making changes
+```
+
+Dry-run mode:
+- Fetches real price data from Tibber
+- Calculates cheapest hours
+- Simulates schedule creation (no HTTP requests to Shelly)
+- Logs all operations that would be performed
+
+## Health Monitoring
+
+Check the status of your scheduler:
+
+```bash
+# Basic health check
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  shelly-tibber python -m src.health_check
+
+# Verbose output
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  shelly-tibber python -m src.health_check --verbose
+
+# JSON output (for monitoring systems)
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  shelly-tibber python -m src.health_check --json
+```
+
+Health status values:
+- **OK**: Last run succeeded within 25 hours
+- **WARNING**: Last run was partial success or is stale (>25 hours)
+- **ERROR**: Last run failed
+- **UNKNOWN**: No status file found
+
+Exit codes: 0 (OK), 1 (WARNING/ERROR), 2 (UNKNOWN)
+
+## Retry Logic
+
+Network requests automatically retry on transient failures:
+
+```json
+{
+  "retry": {
+    "enabled": true,
+    "max_attempts": 3,
+    "initial_delay": 1.0,
+    "backoff_factor": 2.0,
+    "max_delay": 60.0
+  }
+}
+```
+
+- **Exponential backoff**: Delays increase between retries (1s, 2s, 4s, ...)
+- **Applies to**: Both Tibber API and Shelly device requests
+- **Retried errors**: Connection errors, timeouts, HTTP 5xx errors
+
+## Weekday-Based Scheduling
+
+Schedules are automatically tagged with weekday specifications:
+
+- **No conflicts**: Each schedule only runs on its designated day
+- **Accumulative**: Run multiple days to build up a week of schedules
+- **Self-cleaning**: Old schedules skip execution on non-matching days
+
+### Midnight Crossing
+
+The system handles schedules that cross midnight intelligently:
+
+**Example**: Tuesday 23:00 and Wednesday 00:00 are both cheap
+1. Monday evening → Creates: ON at 23:00 Tuesday, OFF at 00:00 Wednesday
+2. Tuesday evening → Detects 00:00 is cheap, removes conflicting OFF, creates: ON at 00:00 Wednesday
+3. Result: Device stays on continuously from 23:00 Tuesday through 01:00 Wednesday
+
+### Clearing Old Schedules
+
+Enable automatic cleanup of old schedules:
+
+```json
+{
+  "scheduling": {
+    "clear_old_schedules": true
+  }
+}
+```
+
+When enabled, schedules from yesterday and the day before are removed.
+
+## Price Threshold Mode
+
+Schedule any hour below a price threshold (in addition to the N cheapest):
+
+```json
+{
+  "scheduling": {
+    "price_threshold": {
+      "enabled": true,
+      "monthly_thresholds": {
+        "1": 0.50,
+        "6": 0.90,
+        "12": 0.50
       }
     }
   }
 }
 ```
 
-**Note**: The application uses switch ID 0 by default for Shelly devices. If your Shelly Pro 1 has multiple switches or you need to control a different switch, you can modify the `switch_id` parameter in the schedule creation methods in the source code.
+- Thresholds are compared against **spot price only** (not total price)
+- Always schedules the N cheapest hours, plus any others below threshold
+- Different thresholds per month allow seasonal adjustments
 
-### Setup Steps
+## Development
 
-1. **Copy the example config file and fill in your details:**
+### Run Tests
+
 ```bash
-cp config.example.json config.json
+./scripts/dev/run_tests.sh
 ```
 
-2. **Get Your Tibber API Token:**
-   - Go to [Tibber Developer Portal](https://developer.tibber.com/)
-   - Create an account and get your API token
-   - Add the token to your `config.json`
+### Project Structure
 
-3. **Get Your Home ID:**
-```bash
-./scripts/dev/get_home_id.sh
 ```
-This will show you available homes and their IDs. Add the correct home ID to your `config.json`.
-
-4. **Test Shelly Connection:**
-```bash
-./scripts/dev/set_example_schedule.sh
+├── src/
+│   ├── schedule_cheapest_hours.py  # Main orchestrator
+│   ├── price_analysis.py           # Tibber API & price logic
+│   ├── shelly_schedule.py          # Shelly device control
+│   ├── config.py                   # Configuration management
+│   ├── models.py                   # Type definitions (dataclasses)
+│   ├── exceptions.py               # Custom exception hierarchy
+│   ├── retry.py                    # Retry logic with backoff
+│   ├── http_client.py              # HTTP client abstraction
+│   ├── logging_config.py           # Structured logging
+│   ├── health_check.py             # Status tracking & monitoring
+│   └── file_io.py                  # File operations
+├── tests/                          # Unit tests
+├── scripts/
+│   ├── run_daily.sh               # Daily scheduling
+│   └── dev/                       # Development utilities
+├── config.example.json            # Configuration template
+├── Dockerfile.python              # Docker image
+├── pyproject.toml                 # Python package config
+└── requirements.txt               # Dependencies
 ```
-This will test the connection to your Shelly device and set a simple example schedule (ON at 08:00, OFF at 10:00).
 
-5. **Test the Setup:**
-```bash
-./scripts/run_daily.sh
-```
+### Development Scripts
 
-6. **Set Up Daily Scheduling:**
-Add to your crontab to run daily at 23:05:
+| Script | Description |
+|--------|-------------|
+| `./scripts/run_daily.sh` | Run the daily scheduler |
+| `./scripts/dev/run_tests.sh` | Run all unit tests |
+| `./scripts/dev/list_schedules.sh` | List current Shelly schedules |
+| `./scripts/dev/clear_schedules.sh` | Clear all Shelly schedules |
+| `./scripts/dev/get_home_id.sh` | Get your Tibber home ID |
+| `./scripts/dev/set_example_schedule.sh` | Test Shelly connection |
+
+### Docker Usage
+
 ```bash
-5 23 * * * cd /path/to/shelly-tibber && ./scripts/run_daily.sh
+# Build image
+docker build -f Dockerfile.python -t shelly-tibber .
+
+# Run scheduler
+docker run --rm \
+  -v $(pwd)/output:/app/output \
+  -v $(pwd)/config.json:/app/config.json:ro \
+  shelly-tibber
+
+# Interactive shell
+docker run --rm -it \
+  -v $(pwd):/app \
+  shelly-tibber bash
 ```
 
 ## Output
 
 ### Files Generated
-- **Results**: `./output/YYYY-MM-DD/` (daily subdirectories)
-  - `result_YYYY-MM-DD.json` - Complete analysis results
-  - `success_YYYY-MM-DD.txt` - Success indicator file
-- **Logs**: `./logs/cron.log` - Execution logs
+
+- `./output/YYYY-MM-DD/result_YYYY-MM-DD.json` - Analysis results
+- `./output/YYYY-MM-DD/success_YYYY-MM-DD.txt` - Success indicator
+- `./output/status.json` - Scheduler status (for health checks)
+- `./logs/cron.log` - Execution logs
 
 ### Sample Output
+
 ```
-📊 Top N Cheapest Hours for Tomorrow (N is configurable):
+📊 Top 10 Cheapest Hours for Tomorrow:
 ============================================================
  1. 02:00 - 0.123 SEK/kWh
  2. 03:00 - 0.145 SEK/kWh
@@ -290,101 +315,44 @@ Add to your crontab to run daily at 23:05:
 ============================================================
 💰 Price difference: 0.111 SEK/kWh
 💡 Consider shifting consumption to cheaper hours!
-
-💾 Results saved to: /app/output/2024-01-15/result_2024-01-15.json
-```
-
-### Volumes
-- `./output:/app/output`: Persists analysis results
-- `./logs:/app/logs`: Persists log files
-- `./config.json:/app/config.json:ro`: Configuration file (read-only)
-
-## Development
-
-### Building Locally
-```bash
-# Build the image
-docker build -f Dockerfile.python -t shelly-tibber .
-
-# Run with volume mounts for development
-docker run --rm \
-  -v $(pwd):/app \
-  -v $(pwd)/output:/app/output \
-  -v $(pwd)/logs:/app/logs \
-  -v $(pwd)/config.json:/app/config.json:ro \
-  shelly-tibber
-```
-
-### Debugging
-```bash
-# Run with interactive shell
-docker run --rm -it -v $(pwd):/app -v $(pwd)/config.json:/app/config.json:ro shelly-tibber bash
-
-# Check logs
-tail -f logs/cron.log
-
-# View output files
-ls -la output/
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Permission Denied**
-   ```bash
-   # Fix permissions
-   sudo chown -R $USER:$USER output/ logs/
-   ```
-
-2. **Container Can't Write to Volumes**
-   ```bash
-   # Ensure directories exist and are writable
-   mkdir -p output logs
-   chmod 755 output logs
-   ```
-
-3. **Network Issues**
-   ```bash
-   # Test network connectivity
-   docker run --rm shelly-tibber curl -I https://api.tibber.com
-   ```
-
-4. **Python Import Errors**
-   ```bash
-   # Rebuild the image
-   docker build -f Dockerfile.python -t shelly-tibber . --no-cache
-   ```
-
-5. **Configuration Issues**
-   ```bash
-   # Check config file exists and is valid
-   cat config.json | jq .
-   ```
-
-6. **Token not found**: Make sure your `config.json` has the correct Tibber token
-7. **Home ID not found**: Run `get_home_id.py` to find your correct home ID
-8. **Shelly connection failed**: Check the IP address and network connectivity
-9. **No price data**: Tibber might not have tomorrow's prices yet
+| Issue | Solution |
+|-------|----------|
+| Permission denied | `sudo chown -R $USER:$USER output/ logs/` |
+| Config validation error | Check for placeholder values in config.json |
+| Network timeout | Increase `shelly.timeout` or check connectivity |
+| No price data | Tibber releases tomorrow's prices around 13:00 CET |
+| Import errors | Rebuild Docker image: `docker build --no-cache ...` |
 
 ### Debug Mode
-Enable debug logging by setting `"debug": true` in your `config.json`.
+
+Enable verbose logging:
+
+```json
+{
+  "tibber": {
+    "debug": true
+  }
+}
+```
+
+### Check Shelly Connection
+
+```bash
+curl http://YOUR_SHELLY_IP/rpc/Shelly.GetStatus
+```
 
 ## Security
 
-- The `config.json` file is excluded from source control
-- Never commit your actual API tokens
-- Use the `config.example.json` as a template
-
-## Advantages of Docker
-
-1. **Consistency**: Same environment across development and production
-2. **Isolation**: No conflicts with system Python packages
-3. **Portability**: Easy to deploy on any system with Docker
-4. **Reproducibility**: Exact same dependencies and versions
-5. **Security**: Isolated execution environment
-6. **CI/CD**: Simple integration with automated systems
+- `config.json` is excluded from source control (`.gitignore`)
+- Never commit API tokens
+- Use environment variables for sensitive values in CI/CD
 
 ## License
 
-MIT License - see LICENSE file for details. 
+MIT License - see LICENSE file for details.

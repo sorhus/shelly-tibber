@@ -74,10 +74,12 @@ class TestApplyDefaults(unittest.TestCase):
         
         self.assertIn('tibber', result)
         self.assertIn('shelly', result)
+        self.assertIn('scheduling', result)
         self.assertEqual(result['tibber']['debug'], False)
         self.assertEqual(result['shelly']['timeout'], 10)
         self.assertEqual(result['shelly']['username'], '')
         self.assertEqual(result['shelly']['password'], '')
+        self.assertEqual(result['scheduling']['num_cheapest_hours'], 10)
 
     def test_apply_defaults_preserves_existing(self):
         """Test defaults don't overwrite existing values"""
@@ -151,6 +153,18 @@ class TestValidateConfig(unittest.TestCase):
         
         with self.assertRaises(ConfigValidationError):
             validate_config(config)
+
+    def test_validate_missing_shelly_host(self):
+        """Test validation fails without shelly.host"""
+        config = {
+            'tibber': {'token': 'test-token', 'home_id': 'home123'},
+            'shelly': {}
+        }
+        
+        with self.assertRaises(ConfigValidationError) as context:
+            validate_config(config)
+        
+        self.assertIn('shelly.host', str(context.exception))
 
     def test_validate_success(self):
         """Test validation passes with valid config"""
@@ -308,7 +322,7 @@ class TestNumericValidation(unittest.TestCase):
         config = {
             'tibber': {'token': 'valid-token', 'home_id': 'home123'},
             'shelly': {'host': '192.168.1.1'},
-            'analysis': {'num_cheapest_hours': 0}
+            'scheduling': {'num_cheapest_hours': 0}
         }
         
         with self.assertRaises(ConfigValidationError) as context:
@@ -321,7 +335,7 @@ class TestNumericValidation(unittest.TestCase):
         config = {
             'tibber': {'token': 'valid-token', 'home_id': 'home123'},
             'shelly': {'host': '192.168.1.1'},
-            'analysis': {'num_cheapest_hours': 30}
+            'scheduling': {'num_cheapest_hours': 30}
         }
         
         with self.assertRaises(ConfigValidationError) as context:
@@ -334,7 +348,7 @@ class TestNumericValidation(unittest.TestCase):
         config = {
             'tibber': {'token': 'valid-token', 'home_id': 'home123'},
             'shelly': {'host': '192.168.1.1', 'timeout': 30},
-            'analysis': {'num_cheapest_hours': 10}
+            'scheduling': {'num_cheapest_hours': 10}
         }
         
         # Should not raise

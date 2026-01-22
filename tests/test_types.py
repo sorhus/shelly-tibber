@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from src.models import (
     TibberConfig,
     ShellyConfig,
-    AnalysisConfig,
     PriceThresholdConfig,
     SchedulingConfig,
     AppConfig,
@@ -54,10 +53,8 @@ class TestConfigTypes(unittest.TestCase):
                 "host": "192.168.1.50",
                 "timeout": 15
             },
-            "analysis": {
-                "num_cheapest_hours": 8
-            },
             "scheduling": {
+                "num_cheapest_hours": 8,
                 "clear_old_schedules": True,
                 "price_threshold": {
                     "enabled": True,
@@ -73,7 +70,7 @@ class TestConfigTypes(unittest.TestCase):
         self.assertTrue(config.tibber.debug)
         self.assertEqual(config.shelly.host, "192.168.1.50")
         self.assertEqual(config.shelly.timeout, 15)
-        self.assertEqual(config.analysis.num_cheapest_hours, 8)
+        self.assertEqual(config.scheduling.num_cheapest_hours, 8)
         self.assertTrue(config.scheduling.clear_old_schedules)
         self.assertTrue(config.scheduling.price_threshold.enabled)
         self.assertEqual(config.scheduling.price_threshold.monthly_thresholds["1"], 0.5)
@@ -83,8 +80,8 @@ class TestConfigTypes(unittest.TestCase):
         config = AppConfig(
             tibber=TibberConfig(token="tok", home_id="home", debug=True),
             shelly=ShellyConfig(host="192.168.1.1", timeout=20),
-            analysis=AnalysisConfig(num_cheapest_hours=5),
             scheduling=SchedulingConfig(
+                num_cheapest_hours=5,
                 clear_old_schedules=True,
                 price_threshold=PriceThresholdConfig(enabled=True, monthly_thresholds={"1": 0.3})
             )
@@ -94,20 +91,20 @@ class TestConfigTypes(unittest.TestCase):
         
         self.assertEqual(data["tibber"]["token"], "tok")
         self.assertEqual(data["shelly"]["timeout"], 20)
-        self.assertEqual(data["analysis"]["num_cheapest_hours"], 5)
+        self.assertEqual(data["scheduling"]["num_cheapest_hours"], 5)
         self.assertTrue(data["scheduling"]["price_threshold"]["enabled"])
 
     def test_app_config_from_dict_with_missing_optional(self):
         """Test AppConfig handles missing optional fields"""
         data = {
             "tibber": {"token": "tok", "home_id": "home"},
-            "shelly": {"host": "192.168.1.1"},
-            "analysis": {"num_cheapest_hours": 10}
+            "shelly": {"host": "192.168.1.1"}
         }
         
         config = AppConfig.from_dict(data)
         
         self.assertFalse(config.tibber.debug)
+        self.assertEqual(config.scheduling.num_cheapest_hours, 10)  # default
         self.assertFalse(config.scheduling.clear_old_schedules)
         self.assertFalse(config.scheduling.price_threshold.enabled)
 
