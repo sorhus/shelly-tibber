@@ -7,16 +7,13 @@ Analyzes energy usage during scheduled hours by comparing output data with Tibbe
 import os
 import json
 import logging
-import requests
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 
-from src.exceptions import (
-    TibberAPIError,
-    HTTPRequestError,
-    JSONParseError,
-)
+from src.exceptions import TibberAPIError
+from src.http_client import TibberClient
+from src.retry import RetryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +41,19 @@ class DailyEnergySummary:
 
 class EnergyAnalyzer:
     """Analyzes energy usage during scheduled hours"""
-    
-    def __init__(self, config: Dict[str, Any]):
+
+    def __init__(self, config: Dict[str, Any], retry_config: RetryConfig = None):
         self.config = config
-        self.token = config['tibber']['token']
         self.home_id = config['tibber']['home_id']
         self.debug = config['tibber']['debug']
+
+        # Create TibberClient for API calls
+        self.tibber_client = TibberClient(
+            token=config['tibber']['token'],
+            timeout=30,
+            retry_config=retry_config or RetryConfig(),
+            debug=self.debug
+        )
         
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -100,13 +104,8 @@ class EnergyAnalyzer:
     def fetch_tibber_consumption(self, start_date: str, end_date: str) -> Dict[str, Any]:
         """Fetch consumption data from Tibber API for a date range"""
         self.debug_log(f"Fetching consumption data from {start_date} to {end_date}")
-        
-        # Convert dates to ISO format
-        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-        end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # Include end date
-        
-        request_data = {
-            "query": """
+
+        query = """
             query($homeId: ID!) {
               viewer {
                 home(id: $homeId) {
@@ -123,53 +122,15 @@ class EnergyAnalyzer:
                 }
               }
             }
-            """,
-            "variables": {
-                "homeId": self.home_id
-            }
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.token}"
-        }
-        
-        try:
-            response = requests.post(
-                "https://api.tibber.com/v1-beta/gql",
-                headers=headers,
-                json=request_data,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                logger.error(f"API request failed with code: {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                raise HTTPRequestError(
-                    f"Tibber API request failed",
-                    status_code=response.status_code,
-                    url="https://api.tibber.com/v1-beta/gql",
-                    details={"response_text": response.text[:500] if response.text else None}
-                )
-            
-            # Parse JSON response
-            try:
-                json_response = response.json()
-                self.debug_log(f"API response keys: {list(json_response.keys()) if json_response else 'None'}")
-                return json_response
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {str(e)}")
-                logger.error(f"Raw response: {response.text}")
-                raise JSONParseError(
-                    f"Failed to parse Tibber API response",
-                    details={"error": str(e), "response_preview": response.text[:200] if response.text else None}
-                )
-                
-        except requests.exceptions.RequestException as e:
-            raise HTTPRequestError(
-                f"HTTP request to Tibber API failed: {str(e)}",
-                url="https://api.tibber.com/v1-beta/gql"
-            )
+        """
+        variables = {"homeId": self.home_id}
+
+        # TibberClient.query() returns the 'data' portion directly
+        data = self.tibber_client.query(query, variables)
+        self.debug_log(f"API response keys: {list(data.keys()) if data else 'None'}")
+
+        # Wrap in expected format for parse_consumption_data
+        return {"data": data}
     
     def parse_consumption_data(self, response: Dict[str, Any], start_date: str, end_date: str) -> List[EnergyUsage]:
         """Parse Tibber consumption response into EnergyUsage objects"""
