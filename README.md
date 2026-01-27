@@ -234,6 +234,13 @@ Schedule any hour below a price threshold (in addition to the N cheapest):
 
 ## Development
 
+### Git Guidelines
+
+Git is a distributed tool for managing code. Follow these practices:
+
+- **Never rewrite remote history**: Do not use `git push --force`, `git rebase`, or `git commit --amend` on branches that have been pushed to a remote. This can cause data loss for other collaborators.
+- **Always pull before developing**: Run `git pull origin main` before starting new work to ensure you have the latest changes.
+
 ### Run Tests
 
 ```bash
