@@ -26,8 +26,11 @@ docker run --rm \
 
 - **Small changes**: Commit directly to main
 - **Larger changes**: Use a feature branch
+- **One branch per ticket**: Each ticket/task gets its own feature branch, even when implementing multiple tickets in one session
+- **Branch naming**: Use `ticket-N-short-description` format (e.g., `ticket-5-health-check-integration`)
 - **Always pull first**: Run `git pull origin main` before starting work
 - **Return to main**: Switch back to main when done with a feature branch
+- **Multiple tickets**: When implementing multiple tickets, create separate branches and PRs for each
 
 ## Project Structure
 
