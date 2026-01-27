@@ -258,5 +258,188 @@ class TestPriceThreshold(unittest.TestCase):
         self.assertGreaterEqual(len(cheapest), 2)
 
 
+class TestFetchTibberData(unittest.TestCase):
+    """Test Tibber data fetching"""
+
+    def setUp(self):
+        self.config = {
+            'tibber': {
+                'token': 'test-token',
+                'home_id': 'home-123',
+                'debug': False
+            },
+            'scheduling': {
+                'num_cheapest_hours': 5
+            }
+        }
+
+    @patch('src.price_analysis.requests.post')
+    def test_fetch_successful(self, mock_post):
+        """Test successful API fetch"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"viewer": {"homes": []}}}
+        mock_post.return_value = mock_response
+
+        analyzer = PriceAnalyzer(self.config)
+        result = analyzer._fetch_tibber_data_internal()
+
+        self.assertIsNotNone(result)
+        mock_post.assert_called_once()
+
+    @patch('src.price_analysis.requests.post')
+    def test_fetch_http_error(self, mock_post):
+        """Test HTTP error raises HTTPRequestError"""
+        from src.exceptions import HTTPRequestError
+
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_post.return_value = mock_response
+
+        analyzer = PriceAnalyzer(self.config)
+
+        with self.assertRaises(HTTPRequestError):
+            analyzer._fetch_tibber_data_internal()
+
+    @patch('src.price_analysis.requests.post')
+    def test_fetch_connection_error(self, mock_post):
+        """Test connection error raises HTTPRequestError"""
+        from src.exceptions import HTTPRequestError
+        import requests
+
+        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
+
+        analyzer = PriceAnalyzer(self.config)
+
+        with self.assertRaises(HTTPRequestError):
+            analyzer._fetch_tibber_data_internal()
+
+    @patch('src.price_analysis.requests.post')
+    def test_fetch_timeout_error(self, mock_post):
+        """Test timeout raises HTTPRequestError"""
+        from src.exceptions import HTTPRequestError
+        import requests
+
+        mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
+
+        analyzer = PriceAnalyzer(self.config)
+
+        with self.assertRaises(HTTPRequestError):
+            analyzer._fetch_tibber_data_internal()
+
+    @patch('src.price_analysis.requests.post')
+    def test_fetch_json_decode_error(self, mock_post):
+        """Test invalid JSON raises JSONParseError"""
+        from src.exceptions import JSONParseError
+        import json
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        mock_post.return_value = mock_response
+
+        analyzer = PriceAnalyzer(self.config)
+
+        with self.assertRaises(JSONParseError):
+            analyzer._fetch_tibber_data_internal()
+
+
+class TestGetCheapestHoursWithThreshold(unittest.TestCase):
+    """Test cheapest hours with price threshold"""
+
+    def setUp(self):
+        self.config = {
+            'tibber': {
+                'token': 'test-token',
+                'home_id': 'home-123',
+                'debug': False
+            },
+            'scheduling': {
+                'num_cheapest_hours': 2,
+                'price_threshold': {
+                    'enabled': True,
+                    'monthly_thresholds': {
+                        '1': 0.35
+                    }
+                }
+            }
+        }
+
+    @patch('src.price_analysis.datetime')
+    def test_threshold_disabled(self, mock_datetime):
+        """Test behavior when threshold is disabled"""
+        mock_datetime.now.return_value.month = 1
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        config = {
+            'tibber': {
+                'token': 'test-token',
+                'home_id': 'home-123',
+                'debug': False
+            },
+            'scheduling': {
+                'num_cheapest_hours': 2,
+                'price_threshold': {
+                    'enabled': False
+                }
+            }
+        }
+
+        prices = [
+            {"startsAt": "2024-01-15T00:00:00Z", "total": 0.5, "energy": 0.3},
+            {"startsAt": "2024-01-15T01:00:00Z", "total": 0.2, "energy": 0.1},
+            {"startsAt": "2024-01-15T02:00:00Z", "total": 0.3, "energy": 0.15},
+        ]
+
+        analyzer = PriceAnalyzer(config)
+
+        with patch.object(analyzer, 'fetch_tibber_data') as mock_fetch:
+            with patch.object(analyzer, 'parse_tibber_response', return_value=prices):
+                mock_fetch.return_value = {}
+
+                cheapest = analyzer.get_cheapest_hours()
+
+        # Should only return the top 2, no threshold additions
+        self.assertEqual(len(cheapest), 2)
+
+
+class TestGetCheapestHoursErrors(unittest.TestCase):
+    """Test error handling in get_cheapest_hours"""
+
+    def setUp(self):
+        self.config = {
+            'tibber': {
+                'token': 'test-token',
+                'home_id': 'home-123',
+                'debug': False
+            },
+            'scheduling': {
+                'num_cheapest_hours': 5
+            }
+        }
+
+    def test_no_prices_raises_exception(self):
+        """Test that empty prices raises exception"""
+        analyzer = PriceAnalyzer(self.config)
+
+        with patch.object(analyzer, 'fetch_tibber_data') as mock_fetch:
+            with patch.object(analyzer, 'parse_tibber_response', return_value=[]):
+                mock_fetch.return_value = {}
+
+                with self.assertRaises(Exception):
+                    analyzer.get_cheapest_hours()
+
+    def test_api_error_propagates(self):
+        """Test that API errors propagate correctly"""
+        from src.exceptions import TibberAPIError
+
+        analyzer = PriceAnalyzer(self.config)
+
+        with patch.object(analyzer, 'fetch_tibber_data', side_effect=TibberAPIError("API error")):
+            with self.assertRaises(TibberAPIError):
+                analyzer.get_cheapest_hours()
+
+
 if __name__ == '__main__':
     unittest.main()

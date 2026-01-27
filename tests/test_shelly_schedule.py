@@ -255,6 +255,212 @@ class TestTestConnection(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestListSchedules(unittest.TestCase):
+    """Test listing schedules"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_list_schedules_parses_response(self):
+        """Test list_schedules correctly parses RPC response"""
+        mock_response = {
+            "result": {
+                "jobs": [
+                    {
+                        "id": 1,
+                        "enable": True,
+                        "timespec": "0 0 10 * * 1",
+                        "calls": [{"method": "Switch.Set", "params": {"on": True}}]
+                    },
+                    {
+                        "id": 2,
+                        "enable": False,
+                        "timespec": "0 30 14 * * 2",
+                        "calls": [{"method": "Switch.Set", "params": {"on": False}}]
+                    }
+                ]
+            }
+        }
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response):
+            schedules = self.manager.list_schedules()
+
+        self.assertEqual(len(schedules), 2)
+        self.assertEqual(schedules[0].id, 1)
+        self.assertTrue(schedules[0].enable)
+        self.assertEqual(schedules[0].timespec, "0 0 10 * * 1")
+        self.assertEqual(schedules[1].id, 2)
+        self.assertFalse(schedules[1].enable)
+
+    def test_list_schedules_empty_response(self):
+        """Test list_schedules handles empty jobs list"""
+        mock_response = {"result": {"jobs": []}}
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response):
+            schedules = self.manager.list_schedules()
+
+        self.assertEqual(schedules, [])
+
+
+class TestUpdateSchedule(unittest.TestCase):
+    """Test schedule updates"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_update_schedule(self):
+        """Test updating a schedule"""
+        mock_response = {"rev": 5}
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response) as mock_request:
+            revision = self.manager.update_schedule(123, enable=False, timespec="0 0 11 * * 1")
+
+        self.assertEqual(revision, 5)
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        self.assertEqual(call_args[0][0], "Schedule.Update")
+        self.assertEqual(call_args[0][1]["id"], 123)
+        self.assertFalse(call_args[0][1]["enable"])
+
+
+class TestMakeRequest(unittest.TestCase):
+    """Test _make_request error handling"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_timeout_raises_shelly_timeout_error(self):
+        """Test timeout raises ShellyTimeoutError"""
+        from src.exceptions import ShellyTimeoutError
+        import requests
+
+        with patch('src.shelly_schedule.requests.post') as mock_post:
+            mock_post.side_effect = requests.exceptions.Timeout()
+
+            with self.assertRaises(ShellyTimeoutError):
+                self.manager._make_request_internal("Test.Method")
+
+    def test_connection_error_raises_shelly_connection_error(self):
+        """Test connection error raises ShellyConnectionError"""
+        import requests
+
+        with patch('src.shelly_schedule.requests.post') as mock_post:
+            mock_post.side_effect = requests.exceptions.ConnectionError()
+
+            with self.assertRaises(ShellyConnectionError):
+                self.manager._make_request_internal("Test.Method")
+
+    def test_rpc_error_raises_shelly_rpc_error(self):
+        """Test RPC error in response raises ShellyRPCError"""
+        from src.exceptions import ShellyRPCError
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "error": {"code": -1, "message": "Method not found"}
+        }
+
+        with patch('src.shelly_schedule.requests.post', return_value=mock_response):
+            with self.assertRaises(ShellyRPCError):
+                self.manager._make_request_internal("Invalid.Method")
+
+    def test_successful_request_returns_result(self):
+        """Test successful request returns result"""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "result": {"id": 123}
+        }
+
+        with patch('src.shelly_schedule.requests.post', return_value=mock_response):
+            result = self.manager._make_request_internal("Schedule.Create", {"timespec": "0 0 10 * * *"})
+
+        # Should return params if present, otherwise the full result
+        self.assertIsNotNone(result)
+
+
+class TestCreateSchedule(unittest.TestCase):
+    """Test schedule creation"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_create_schedule_returns_id(self):
+        """Test create_schedule returns the schedule ID"""
+        mock_response = {"result": {"id": 456}}
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response):
+            schedule_id = self.manager.create_schedule(
+                timespec="0 0 10 * * 1",
+                calls=[{"method": "Switch.Set", "params": {"on": True}}]
+            )
+
+        self.assertEqual(schedule_id, 456)
+
+    def test_create_schedule_error_raises_schedule_creation_error(self):
+        """Test create_schedule raises ScheduleCreationError on failure"""
+        from src.exceptions import ScheduleCreationError
+
+        with patch.object(self.manager, '_make_request', side_effect=ShellyConnectionError("Connection failed")):
+            with self.assertRaises(ScheduleCreationError):
+                self.manager.create_schedule(
+                    timespec="0 0 10 * * 1",
+                    calls=[{"method": "Switch.Set", "params": {"on": True}}]
+                )
+
+
+class TestDeleteSchedule(unittest.TestCase):
+    """Test schedule deletion"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_delete_schedule_returns_revision(self):
+        """Test delete_schedule returns revision"""
+        mock_response = {"rev": 10}
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response):
+            revision = self.manager.delete_schedule(123)
+
+        self.assertEqual(revision, 10)
+
+    def test_delete_schedule_error_raises_schedule_deletion_error(self):
+        """Test delete_schedule raises ScheduleDeletionError on failure"""
+        from src.exceptions import ScheduleDeletionError
+
+        with patch.object(self.manager, '_make_request', side_effect=ShellyConnectionError("Connection failed")):
+            with self.assertRaises(ScheduleDeletionError):
+                self.manager.delete_schedule(123)
+
+
+class TestDeleteAllSchedules(unittest.TestCase):
+    """Test delete all schedules"""
+
+    def setUp(self):
+        self.manager = ShellyScheduleManager("192.168.1.100", debug=False)
+        self.manager.logger = Mock()
+
+    def test_delete_all_schedules_returns_revision(self):
+        """Test delete_all_schedules returns revision"""
+        mock_response = {"rev": 15}
+
+        with patch.object(self.manager, '_make_request', return_value=mock_response):
+            revision = self.manager.delete_all_schedules()
+
+        self.assertEqual(revision, 15)
+
+    def test_delete_all_schedules_error_raises_schedule_deletion_error(self):
+        """Test delete_all_schedules raises ScheduleDeletionError on failure"""
+        from src.exceptions import ScheduleDeletionError
+
+        with patch.object(self.manager, '_make_request', side_effect=ShellyConnectionError("Connection failed")):
+            with self.assertRaises(ScheduleDeletionError):
+                self.manager.delete_all_schedules()
+
+
 class TestDryRunMode(unittest.TestCase):
     """Test dry-run mode functionality"""
 
