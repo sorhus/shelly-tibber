@@ -22,6 +22,13 @@ docker run --rm \
   shelly-tibber python -m src.module_name
 ```
 
+## Git Workflow
+
+- **Small changes**: Commit directly to main
+- **Larger changes**: Use a feature branch
+- **Always pull first**: Run `git pull origin main` before starting work
+- **Return to main**: Switch back to main when done with a feature branch
+
 ## Project Structure
 
 - `src/` - Python source code
