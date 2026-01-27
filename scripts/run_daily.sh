@@ -39,11 +39,26 @@ if [ $BUILD_EXIT_CODE -ne 0 ]; then
     exit 1
 fi
 
-# Run the Docker container with host networking (needed for mDNS resolution)
+# Resolve mDNS hostname on host before Docker runs
+# Docker containers can't use the host's avahi/mDNS resolver, so we resolve
+# .local hostnames here and pass the IP via environment variable
+SHELLY_HOST_ENV=""
+SHELLY_HOST=$(grep -o '"host"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+if [[ "$SHELLY_HOST" == *.local ]]; then
+    RESOLVED_IP=$(getent hosts "$SHELLY_HOST" 2>/dev/null | awk '{print $1}')
+    if [ -n "$RESOLVED_IP" ]; then
+        log "Resolved mDNS: $SHELLY_HOST -> $RESOLVED_IP"
+        SHELLY_HOST_ENV="-e SHELLY_HOST=$RESOLVED_IP"
+    else
+        log "WARNING: Could not resolve mDNS hostname $SHELLY_HOST"
+    fi
+fi
+
+# Run the Docker container
 log "Running the scheduler..."
 docker run --rm \
-    --network=host \
     -e FORCE_RUN="$FORCE_RUN" \
+    $SHELLY_HOST_ENV \
     -v "$PROJECT_DIR/output:/app/output" \
     -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
     shelly-tibber \
