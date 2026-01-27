@@ -1,0 +1,30 @@
+# Claude Code Instructions
+
+## Running Python
+
+Python is always run inside Docker. Never use `python` or `python3` directly.
+
+### Run tests
+```bash
+./scripts/dev/run_tests.sh
+```
+
+### Run the scheduler
+```bash
+./scripts/run_daily.sh
+```
+
+### Run a specific Python module
+```bash
+docker run --rm \
+  -v $(pwd)/src:/app/src \
+  -v $(pwd)/config.json:/app/config.json:ro \
+  shelly-tibber python -m src.module_name
+```
+
+## Project Structure
+
+- `src/` - Python source code
+- `tests/` - Unit tests (pytest)
+- `scripts/` - Shell scripts for running in Docker
+- `scripts/dev/` - Development utilities

@@ -7,6 +7,7 @@ Handles loading configuration from config.json file with validation
 import os
 import json
 import logging
+import subprocess
 from typing import Dict, Any, List, Optional
 
 from src.models import AppConfig
@@ -80,6 +81,42 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
             logger.debug(f"Applied environment override: {env_var} -> {section}.{field}")
     
     return config
+
+
+def resolve_mdns_hostname(hostname: str) -> str:
+    """
+    Resolve .local mDNS hostnames using the system resolver.
+
+    Python's socket library doesn't use the system's mDNS resolver on Linux,
+    so .local hostnames fail to resolve. This function uses `getent hosts`
+    to resolve via the system resolver (which includes avahi/mDNS).
+
+    Returns the IP address if resolution succeeds, otherwise the original hostname.
+    """
+    if not hostname.lower().endswith('.local'):
+        return hostname
+
+    try:
+        result = subprocess.run(
+            ['getent', 'hosts', hostname],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Output format: "192.168.1.100   hostname.local"
+            ip_address = result.stdout.strip().split()[0]
+            logger.info(f"Resolved mDNS hostname {hostname} -> {ip_address}")
+            return ip_address
+    except FileNotFoundError:
+        # getent not available (e.g., on macOS), fall through to original
+        logger.debug("getent not available, using original hostname")
+    except subprocess.TimeoutExpired:
+        logger.warning(f"mDNS resolution timed out for {hostname}")
+    except Exception as e:
+        logger.debug(f"mDNS resolution failed for {hostname}: {e}")
+
+    return hostname
 
 
 def load_config_dict() -> Dict[str, Any]:
@@ -211,6 +248,11 @@ def get_config(require_home_id: bool = True) -> Dict[str, Any]:
     config = apply_defaults(config)
     config = apply_env_overrides(config)
     validate_config(config, require_home_id=require_home_id)
+
+    # Resolve mDNS hostnames (needed for Linux where Python doesn't use system resolver)
+    if 'shelly' in config and 'host' in config['shelly']:
+        config['shelly']['host'] = resolve_mdns_hostname(config['shelly']['host'])
+
     return config
 
 
