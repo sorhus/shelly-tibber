@@ -29,7 +29,7 @@ class PriceAnalyzer:
         self.config = config
         self.token = config['tibber']['token']
         self.home_id = config['tibber']['home_id']
-        self.num_cheapest_hours = config['analysis']['num_cheapest_hours']
+        self.num_cheapest_hours = config['scheduling']['num_cheapest_hours']
         self.debug = config['tibber']['debug']
         self.retry_config = retry_config or RetryConfig()
         

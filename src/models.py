@@ -31,12 +31,6 @@ class ShellyConfig:
 
 
 @dataclass
-class AnalysisConfig:
-    """Price analysis configuration"""
-    num_cheapest_hours: int = 10
-
-
-@dataclass
 class PriceThresholdConfig:
     """Price threshold configuration for additional scheduling"""
     enabled: bool = False
@@ -46,6 +40,7 @@ class PriceThresholdConfig:
 @dataclass
 class SchedulingConfig:
     """Scheduling behavior configuration"""
+    num_cheapest_hours: int = 10
     clear_old_schedules: bool = False
     price_threshold: PriceThresholdConfig = field(default_factory=PriceThresholdConfig)
 
@@ -55,7 +50,6 @@ class AppConfig:
     """Complete application configuration"""
     tibber: TibberConfig
     shelly: ShellyConfig
-    analysis: AnalysisConfig
     scheduling: SchedulingConfig = field(default_factory=SchedulingConfig)
 
     @classmethod
@@ -70,6 +64,7 @@ class AppConfig:
 
         # Parse scheduling config
         scheduling = SchedulingConfig(
+            num_cheapest_hours=data.get("scheduling", {}).get("num_cheapest_hours", 10),
             clear_old_schedules=data.get("scheduling", {}).get("clear_old_schedules", False),
             price_threshold=price_threshold
         )
@@ -85,9 +80,6 @@ class AppConfig:
                 timeout=data.get("shelly", {}).get("timeout", 10),
                 username=data.get("shelly", {}).get("username", ""),
                 password=data.get("shelly", {}).get("password", "")
-            ),
-            analysis=AnalysisConfig(
-                num_cheapest_hours=data.get("analysis", {}).get("num_cheapest_hours", 10)
             ),
             scheduling=scheduling
         )
@@ -106,10 +98,8 @@ class AppConfig:
                 "username": self.shelly.username,
                 "password": self.shelly.password
             },
-            "analysis": {
-                "num_cheapest_hours": self.analysis.num_cheapest_hours
-            },
             "scheduling": {
+                "num_cheapest_hours": self.scheduling.num_cheapest_hours,
                 "clear_old_schedules": self.scheduling.clear_old_schedules,
                 "price_threshold": {
                     "enabled": self.scheduling.price_threshold.enabled,

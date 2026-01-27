@@ -59,10 +59,8 @@ Create `config.json` from the example:
     "username": "",
     "password": ""
   },
-  "analysis": {
-    "num_cheapest_hours": 10
-  },
   "scheduling": {
+    "num_cheapest_hours": 10,
     "clear_old_schedules": false,
     "price_threshold": {
       "enabled": false,
@@ -96,7 +94,7 @@ Configuration values can be overridden via environment variables:
 | `SHELLY_TIMEOUT` | `shelly.timeout` | integer |
 | `SHELLY_USERNAME` | `shelly.username` | string |
 | `SHELLY_PASSWORD` | `shelly.password` | string |
-| `NUM_CHEAPEST_HOURS` | `analysis.num_cheapest_hours` | integer |
+| `NUM_CHEAPEST_HOURS` | `scheduling.num_cheapest_hours` | integer |
 | `CLEAR_OLD_SCHEDULES` | `scheduling.clear_old_schedules` | boolean |
 
 Example:
@@ -110,6 +108,7 @@ The application validates configuration on startup:
 - **Required fields**: `tibber.token`, `tibber.home_id`, `shelly.host`
 - **Placeholder detection**: Rejects unconfigured placeholder values
 - **Range validation**: `timeout` (1-300), `num_cheapest_hours` (1-24)
+- **Defaults**: `num_cheapest_hours` defaults to 10, `timeout` defaults to 10
 
 ## Dry-Run Mode
 
@@ -235,6 +234,16 @@ Schedule any hour below a price threshold (in addition to the N cheapest):
 
 ## Development
 
+<<<<<<< HEAD
+=======
+### Git Guidelines
+
+Git is a distributed tool for managing code. Follow these practices:
+
+- **Never rewrite remote history**: Do not use `git push --force`, `git rebase`, or `git commit --amend` on branches that have been pushed to a remote. This can cause data loss for other collaborators.
+- **Always pull before developing**: Run `git pull origin main` before starting new work to ensure you have the latest changes.
+
+>>>>>>> improve-documentation
 ### Run Tests
 
 ```bash

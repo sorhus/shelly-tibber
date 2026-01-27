@@ -5,6 +5,7 @@ Main orchestrator for scheduling electricity usage during cheapest hours
 """
 
 import os
+import sys
 import json
 import logging
 from datetime import datetime, timezone, timedelta

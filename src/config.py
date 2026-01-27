@@ -28,7 +28,7 @@ ENV_VAR_MAPPINGS = {
     "SHELLY_TIMEOUT": ("shelly", "timeout"),
     "SHELLY_USERNAME": ("shelly", "username"),
     "SHELLY_PASSWORD": ("shelly", "password"),
-    "NUM_CHEAPEST_HOURS": ("analysis", "num_cheapest_hours"),
+    "NUM_CHEAPEST_HOURS": ("scheduling", "num_cheapest_hours"),
     "CLEAR_OLD_SCHEDULES": ("scheduling", "clear_old_schedules"),
 }
 
@@ -131,6 +131,9 @@ def apply_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
             'timeout': 10,
             'username': '',
             'password': ''
+        },
+        'scheduling': {
+            'num_cheapest_hours': 10
         }
     }
     
@@ -169,9 +172,11 @@ def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> Non
         elif isinstance(value, str) and value in PLACEHOLDER_VALUES:
             errors.append(f"{section}.{field}: contains placeholder value - please configure")
     
-    # Check for placeholder values in other fields
+    # Check shelly.host (required)
     shelly_host = config.get('shelly', {}).get('host', '')
-    if shelly_host in PLACEHOLDER_VALUES:
+    if not shelly_host:
+        errors.append("shelly.host: required field is missing")
+    elif shelly_host in PLACEHOLDER_VALUES:
         errors.append("shelly.host: contains placeholder value - please configure")
     
     # Validate numeric ranges
@@ -180,10 +185,10 @@ def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> Non
         if not isinstance(timeout, int) or timeout < 1 or timeout > 300:
             errors.append("shelly.timeout: must be an integer between 1 and 300")
     
-    num_hours = config.get('analysis', {}).get('num_cheapest_hours')
+    num_hours = config.get('scheduling', {}).get('num_cheapest_hours')
     if num_hours is not None:
         if not isinstance(num_hours, int) or num_hours < 1 or num_hours > 24:
-            errors.append("analysis.num_cheapest_hours: must be an integer between 1 and 24")
+            errors.append("scheduling.num_cheapest_hours: must be an integer between 1 and 24")
     
     if errors:
         raise ConfigValidationError(
