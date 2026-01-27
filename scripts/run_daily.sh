@@ -39,9 +39,10 @@ if [ $BUILD_EXIT_CODE -ne 0 ]; then
     exit 1
 fi
 
-# Run the Docker container
+# Run the Docker container with host networking (needed for mDNS resolution)
 log "Running the scheduler..."
 docker run --rm \
+    --network=host \
     -e FORCE_RUN="$FORCE_RUN" \
     -v "$PROJECT_DIR/output:/app/output" \
     -v "$PROJECT_DIR/config.json:/app/config.json:ro" \
