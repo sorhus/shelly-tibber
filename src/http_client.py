@@ -196,26 +196,31 @@ class TibberClient(BaseHTTPClient):
             "Authorization": f"Bearer {token}"
         }
     
-    def query(self, graphql_query: str) -> Dict[str, Any]:
+    def query(self, graphql_query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Execute a GraphQL query against the Tibber API.
-        
+
         Args:
             graphql_query: The GraphQL query string
-            
+            variables: Optional dictionary of GraphQL variables
+
         Returns:
             The 'data' portion of the GraphQL response
-            
+
         Raises:
             TibberAPIError: If the API returns an error
             HTTPRequestError: If the HTTP request fails
         """
         self._debug_log(f"Executing GraphQL query")
-        
+
+        json_data = {"query": graphql_query}
+        if variables:
+            json_data["variables"] = variables
+
         response = self._request_with_retry(
             "POST",
             headers=self._headers,
-            json_data={"query": graphql_query},
+            json_data=json_data,
             retry_exceptions=(HTTPRequestError,)
         )
         
