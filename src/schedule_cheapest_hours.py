@@ -16,6 +16,7 @@ from src.file_io import FileManager
 from src.shelly_schedule import ShellyScheduleManager
 from src.config import get_config
 from src.retry import RetryConfig
+from src.health_check import StatusManager, RunStatus
 
 # Configure logging
 logging.basicConfig(
@@ -26,15 +27,16 @@ logger = logging.getLogger(__name__)
 
 class CheapestHoursScheduler:
     """Main orchestrator for scheduling cheapest hours"""
-    
-    def __init__(self, config: Dict[str, Any], dry_run: bool = False):
+
+    def __init__(self, config: Dict[str, Any], dry_run: bool = False, status_manager: StatusManager = None):
         self.config = config
         self.dry_run = dry_run
-        
+        self.status_manager = status_manager or StatusManager()
+
         # Get retry configuration from config or use defaults
         retry_dict = config.get('retry', {})
         retry_config = RetryConfig.from_dict(retry_dict) if retry_dict else RetryConfig()
-        
+
         self.price_analyzer = PriceAnalyzer(config, retry_config=retry_config)
         self.file_manager = FileManager()
         self.schedule_manager = ShellyScheduleManager(
@@ -44,7 +46,7 @@ class CheapestHoursScheduler:
             dry_run=dry_run,
             retry_config=retry_config
         )
-        
+
         if dry_run:
             logger.info("=" * 60)
             logger.info("DRY RUN MODE - No changes will be made to Shelly device")
@@ -94,21 +96,50 @@ class CheapestHoursScheduler:
         logger.info(f"Not processed today ({today}), proceeding")
         return True
     
+    def _write_status(
+        self,
+        start_time: datetime,
+        status: str,
+        schedules_created: int = 0,
+        cheapest_hours: List[str] = None,
+        target_date: str = "",
+        error_message: str = None
+    ) -> None:
+        """Write run status to status file"""
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        run_status = RunStatus(
+            timestamp=start_time.isoformat(),
+            status=status,
+            schedules_created=schedules_created,
+            cheapest_hours=cheapest_hours or [],
+            target_date=target_date,
+            error_message=error_message,
+            duration_seconds=duration,
+            dry_run=self.dry_run
+        )
+        self.status_manager.write_status(run_status)
+
     def run(self) -> bool:
         """Main execution flow"""
+        start_time = datetime.now(timezone.utc)
         try:
             logger.info("Starting cheapest hours scheduling process")
-            
+
             # Step 1: Check if we should run today
             if not self.should_run_today():
                 return True
-            
+
             # Step 2: Fetch and analyze prices
             logger.info("Fetching electricity prices...")
             cheapest_hours = self.price_analyzer.get_cheapest_hours()
             
             if not cheapest_hours:
                 logger.error("No cheapest hours found")
+                self._write_status(
+                    start_time=start_time,
+                    status="failure",
+                    error_message="No cheapest hours found"
+                )
                 return False
             
             logger.info(f"Found {len(cheapest_hours)} cheapest hours")
@@ -261,11 +292,30 @@ class CheapestHoursScheduler:
                 self.file_manager.write_result_file(today, result_data)
                 self.file_manager.write_success_file(today)
             
+            # Extract hour strings for status tracking
+            cheapest_hour_strings = [
+                datetime.fromisoformat(price['startsAt'].replace('Z', '+00:00')).strftime('%H:%M')
+                for price in cheapest_hours
+            ]
+
+            self._write_status(
+                start_time=start_time,
+                status="success",
+                schedules_created=len(schedule_ids),
+                cheapest_hours=cheapest_hour_strings,
+                target_date=dt.strftime('%Y-%m-%d')
+            )
+
             logger.info("Successfully completed scheduling process")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to complete scheduling process: {str(e)}")
+            self._write_status(
+                start_time=start_time,
+                status="failure",
+                error_message=str(e)
+            )
             return False
 
 def main():
