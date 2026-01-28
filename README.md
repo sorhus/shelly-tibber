@@ -54,7 +54,7 @@ Create `config.json` from the example:
     "debug": false
   },
   "shelly": {
-    "host": "192.168.1.100",
+    "host": "<shelly hostname or ip>", # e.g. shellypro1-<id>.local
     "timeout": 10,
     "username": "",
     "password": ""
