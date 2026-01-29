@@ -24,6 +24,8 @@ docker run --rm \
 
 ## Git Workflow
 
+> **CRITICAL**: Always run `git pull origin main` BEFORE making any file edits.
+
 - **Small changes**: Commit directly to main
 - **Larger changes**: Use a feature branch
 - **One branch per ticket**: Each ticket/task gets its own feature branch, even when implementing multiple tickets in one session
