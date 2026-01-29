@@ -462,6 +462,138 @@ class TestMidnightHourHandling(unittest.TestCase):
         mock_shelly.list_schedules.assert_called()
 
 
+class TestClearOldSchedules(unittest.TestCase):
+    """Test old schedule cleanup behavior"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.config = {
+            'tibber': {
+                'token': 'test-token',
+                'home_id': 'home-123',
+                'debug': False
+            },
+            'shelly': {
+                'host': '192.168.1.100',
+                'timeout': 10
+            },
+            'scheduling': {
+                'num_cheapest_hours': 3,
+                'clear_old_schedules': True
+            }
+        }
+        tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+        self.sample_prices = [
+            {"startsAt": (tomorrow.replace(hour=2, minute=0, second=0, microsecond=0)).isoformat(), "total": 0.2},
+        ]
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir)
+
+    @patch('src.schedule_cheapest_hours.ShellyScheduleManager')
+    @patch('src.schedule_cheapest_hours.PriceAnalyzer')
+    @patch('src.schedule_cheapest_hours.FileManager')
+    def test_clear_old_schedules_deletes_all_except_today(self, mock_file_manager_cls, mock_price_analyzer_cls, mock_shelly_cls):
+        """Test that clear_old_schedules=True deletes all weekdays except today"""
+        mock_price_analyzer = mock_price_analyzer_cls.return_value
+        mock_price_analyzer.get_cheapest_hours.return_value = self.sample_prices
+
+        mock_shelly = mock_shelly_cls.return_value
+        mock_shelly.list_schedules.return_value = []
+        mock_shelly.create_price_based_schedules.return_value = ([1], [
+            (datetime.now(timezone.utc), datetime.now(timezone.utc) + timedelta(hours=1))
+        ])
+        mock_shelly.delete_schedules_for_weekdays.return_value = 5
+
+        mock_file_manager = mock_file_manager_cls.return_value
+        mock_file_manager.file_exists.return_value = False
+        mock_file_manager._get_daily_dir.return_value = self.temp_dir
+        mock_file_manager.get_success_file_path.return_value = os.path.join(self.temp_dir, 'success')
+
+        status_manager = StatusManager(os.path.join(self.temp_dir, 'status.json'))
+        scheduler = CheapestHoursScheduler(self.config, status_manager=status_manager)
+        result = scheduler.run()
+
+        self.assertTrue(result)
+        # Verify delete_schedules_for_weekdays was called
+        mock_shelly.delete_schedules_for_weekdays.assert_called_once()
+
+        # Verify it was called with 6 weekdays (all except today)
+        call_args = mock_shelly.delete_schedules_for_weekdays.call_args[0][0]
+        self.assertEqual(len(call_args), 6)
+
+        # Verify today's weekday is NOT in the list
+        today_cron = (datetime.now().weekday() + 1) % 7
+        self.assertNotIn(today_cron, call_args)
+
+    @patch('src.schedule_cheapest_hours.ShellyScheduleManager')
+    @patch('src.schedule_cheapest_hours.PriceAnalyzer')
+    @patch('src.schedule_cheapest_hours.FileManager')
+    def test_clear_old_schedules_false_does_not_delete(self, mock_file_manager_cls, mock_price_analyzer_cls, mock_shelly_cls):
+        """Test that clear_old_schedules=False does not delete any schedules"""
+        self.config['scheduling']['clear_old_schedules'] = False
+
+        mock_price_analyzer = mock_price_analyzer_cls.return_value
+        mock_price_analyzer.get_cheapest_hours.return_value = self.sample_prices
+
+        mock_shelly = mock_shelly_cls.return_value
+        mock_shelly.list_schedules.return_value = []
+        mock_shelly.create_price_based_schedules.return_value = ([1], [
+            (datetime.now(timezone.utc), datetime.now(timezone.utc) + timedelta(hours=1))
+        ])
+
+        mock_file_manager = mock_file_manager_cls.return_value
+        mock_file_manager.file_exists.return_value = False
+        mock_file_manager._get_daily_dir.return_value = self.temp_dir
+        mock_file_manager.get_success_file_path.return_value = os.path.join(self.temp_dir, 'success')
+
+        status_manager = StatusManager(os.path.join(self.temp_dir, 'status.json'))
+        scheduler = CheapestHoursScheduler(self.config, status_manager=status_manager)
+        result = scheduler.run()
+
+        self.assertTrue(result)
+        # Verify delete_schedules_for_weekdays was NOT called
+        mock_shelly.delete_schedules_for_weekdays.assert_not_called()
+
+    @patch('src.schedule_cheapest_hours.ShellyScheduleManager')
+    @patch('src.schedule_cheapest_hours.PriceAnalyzer')
+    @patch('src.schedule_cheapest_hours.FileManager')
+    def test_clear_old_schedules_correct_weekdays(self, mock_file_manager_cls, mock_price_analyzer_cls, mock_shelly_cls):
+        """Test that correct weekdays are passed for deletion"""
+        mock_price_analyzer = mock_price_analyzer_cls.return_value
+        mock_price_analyzer.get_cheapest_hours.return_value = self.sample_prices
+
+        mock_shelly = mock_shelly_cls.return_value
+        mock_shelly.list_schedules.return_value = []
+        mock_shelly.create_price_based_schedules.return_value = ([1], [
+            (datetime.now(timezone.utc), datetime.now(timezone.utc) + timedelta(hours=1))
+        ])
+        mock_shelly.delete_schedules_for_weekdays.return_value = 0
+
+        mock_file_manager = mock_file_manager_cls.return_value
+        mock_file_manager.file_exists.return_value = False
+        mock_file_manager._get_daily_dir.return_value = self.temp_dir
+        mock_file_manager.get_success_file_path.return_value = os.path.join(self.temp_dir, 'success')
+
+        status_manager = StatusManager(os.path.join(self.temp_dir, 'status.json'))
+        scheduler = CheapestHoursScheduler(self.config, status_manager=status_manager)
+        result = scheduler.run()
+
+        self.assertTrue(result)
+
+        # Get the weekdays that were passed for deletion
+        call_args = mock_shelly.delete_schedules_for_weekdays.call_args[0][0]
+
+        # All weekdays should be 0-6
+        for weekday in call_args:
+            self.assertIn(weekday, range(7))
+
+        # Should contain exactly all weekdays except today
+        today_cron = (datetime.now().weekday() + 1) % 7
+        expected_weekdays = [w for w in range(7) if w != today_cron]
+        self.assertEqual(sorted(call_args), sorted(expected_weekdays))
+
+
 class TestExceptionHandling(unittest.TestCase):
     """Test exception handling during scheduling"""
 

@@ -210,19 +210,16 @@ class CheapestHoursScheduler:
             # Step 4: Optionally delete old schedules
             clear_schedules = self.config.get('scheduling', {}).get('clear_old_schedules', False)
             if clear_schedules:
-                # Calculate yesterday's and day-before-yesterday's weekdays
+                # Delete all schedules except today's (today's schedules may still need to run)
                 today_date = datetime.now()
-                yesterday = today_date - timedelta(days=1)
-                day_before_yesterday = today_date - timedelta(days=2)
-                
-                # Convert to cron weekdays
-                yesterday_cron = (yesterday.weekday() + 1) % 7
-                day_before_cron = (day_before_yesterday.weekday() + 1) % 7
-                
-                weekdays_to_delete = [yesterday_cron, day_before_cron]
-                logger.info(f"Clearing schedules for yesterday ({yesterday.strftime('%A')}) and day before ({day_before_yesterday.strftime('%A')})")
+                today_cron = (today_date.weekday() + 1) % 7
+
+                # All weekdays except today
+                weekdays_to_delete = [w for w in range(7) if w != today_cron]
+
+                logger.info(f"Clearing all schedules except today ({today_date.strftime('%A')}, weekday {today_cron})")
                 logger.info(f"Deleting schedules for weekdays: {weekdays_to_delete}")
-                
+
                 deleted_count = self.schedule_manager.delete_schedules_for_weekdays(weekdays_to_delete)
                 logger.info(f"Deleted {deleted_count} old schedules")
             else:
