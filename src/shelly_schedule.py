@@ -4,11 +4,7 @@ Shelly Schedule Management Module
 Handles creating, updating, and deleting schedules on Shelly devices
 """
 
-import requests
 import logging
-import os
-import json
-import uuid
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -20,7 +16,8 @@ from src.exceptions import (
     ScheduleCreationError,
     ScheduleDeletionError,
 )
-from src.retry import RetryConfig, execute_with_retry
+from src.http_client import ShellyClient
+from src.retry import RetryConfig
 
 @dataclass
 class ScheduleJob:
@@ -49,10 +46,14 @@ class ShellyScheduleManager:
         self.timeout = timeout
         self.debug = debug
         self.dry_run = dry_run
-        self.base_url = f"http://{shelly_host}/rpc"
+        self.client = ShellyClient(
+            host=shelly_host,
+            timeout=timeout,
+            retry_config=retry_config,
+            debug=debug,
+        )
         self.logger = logging.getLogger(__name__)
         self._dry_run_schedule_counter = 0  # For generating fake schedule IDs in dry-run mode
-        self.retry_config = retry_config or RetryConfig()
     
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -60,170 +61,8 @@ class ShellyScheduleManager:
             self.logger.debug(f"[DEBUG] {message}")
         
     def _make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Make an RPC request to the Shelly device with retry logic"""
-        # Use retry logic for transient errors (connection, timeout)
-        # Don't retry RPC errors as they indicate actual device-side issues
-        def do_request():
-            return self._make_request_internal(method, params)
-        
-        if self.retry_config.enabled:
-            return execute_with_retry(
-                do_request,
-                self.retry_config,
-                exceptions=(ShellyConnectionError, ShellyTimeoutError)
-            )
-        else:
-            return do_request()
-    
-    def _make_request_internal(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Internal method to make an RPC request to the Shelly device"""
-        payload = {
-            "id": 1,
-            "method": method
-        }
-        if params:
-            payload["params"] = params
-
-        # Helper function to safely serialize objects for JSON logging
-        def safe_json_serialize(obj):
-            """Safely serialize objects for JSON logging, handling Mock objects"""
-            if obj is None:
-                return None
-            if hasattr(obj, '__class__') and 'Mock' in obj.__class__.__name__:
-                return f"<Mock object: {obj.__class__.__name__}>"
-            if isinstance(obj, (str, int, float, bool)):
-                return obj
-            if isinstance(obj, (list, tuple)):
-                return [safe_json_serialize(item) for item in obj]
-            if isinstance(obj, dict):
-                return {str(k): safe_json_serialize(v) for k, v in obj.items()}
-            try:
-                # Try to serialize normally
-                json.dumps(obj)
-                return obj
-            except (TypeError, ValueError):
-                # If serialization fails, convert to string
-                return str(obj)
-
-        # Only prepare log data if debug mode is enabled
-        log_data = None
-        log_filename = None
-        
-        if self.debug:
-            # Prepare log data with safe serialization
-            log_data = {
-                "timestamp": datetime.now().isoformat(),
-                "method": method,
-                "params": safe_json_serialize(params),
-                "request": safe_json_serialize(payload)
-            }
-            
-            # Create daily subdirectory for logs
-            today = datetime.now().strftime('%Y-%m-%d')
-            log_dir = os.path.join("output", today)
-            os.makedirs(log_dir, exist_ok=True)
-            
-            log_filename = os.path.join(
-                log_dir,
-                f"shelly_call_{datetime.now().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}.json"
-            )
-        
-        try:
-            response = requests.post(
-                self.base_url,
-                json=payload,
-                timeout=self.timeout
-            )
-            
-            # Only log response data if debug mode is enabled
-            if self.debug and log_data:
-                log_data["http_status"] = response.status_code
-                log_data["response_text"] = response.text
-                try:
-                    result = response.json()
-                    log_data["response_json"] = safe_json_serialize(result)
-                except Exception:
-                    result = None
-                    log_data["response_json"] = None
-                
-                # Check for RPC errors
-                if result and "error" in result:
-                    log_data["rpc_error"] = safe_json_serialize(result["error"])
-                    with open(log_filename, "w") as f:
-                        json.dump(log_data, f, indent=2)
-                    error_info = result["error"]
-                    raise ShellyRPCError(
-                        f"Shelly RPC error: {error_info}",
-                        method=method,
-                        error_code=error_info.get("code") if isinstance(error_info, dict) else None,
-                        details={"error": error_info}
-                    )
-                
-                # Write successful response to log file
-                with open(log_filename, "w") as f:
-                    json.dump(log_data, f, indent=2)
-            else:
-                # Parse response without logging
-                try:
-                    result = response.json()
-                except Exception:
-                    result = None
-                
-                # Check for RPC errors even without logging
-                if result and "error" in result:
-                    error_info = result["error"]
-                    raise ShellyRPCError(
-                        f"Shelly RPC error: {error_info}",
-                        method=method,
-                        error_code=error_info.get("code") if isinstance(error_info, dict) else None,
-                        details={"error": error_info}
-                    )
-            
-            return result.get("params", result) if result else None
-            
-        except requests.exceptions.Timeout as e:
-            # Log exception if debug mode is enabled
-            if self.debug and log_data and log_filename:
-                log_data["exception"] = str(e)
-                with open(log_filename, "w") as f:
-                    json.dump(log_data, f, indent=2)
-            raise ShellyTimeoutError(
-                f"Shelly device request timed out after {self.timeout}s",
-                details={"host": self.shelly_host, "method": method, "timeout": self.timeout}
-            )
-        except requests.exceptions.ConnectionError as e:
-            # Log exception if debug mode is enabled
-            if self.debug and log_data and log_filename:
-                log_data["exception"] = str(e)
-                with open(log_filename, "w") as f:
-                    json.dump(log_data, f, indent=2)
-            raise ShellyConnectionError(
-                f"Cannot connect to Shelly device at {self.shelly_host}",
-                details={"host": self.shelly_host, "error": str(e)}
-            )
-        except requests.exceptions.RequestException as e:
-            # Log exception if debug mode is enabled
-            if self.debug and log_data and log_filename:
-                log_data["exception"] = str(e)
-                with open(log_filename, "w") as f:
-                    json.dump(log_data, f, indent=2)
-            raise ShellyConnectionError(
-                f"Request to Shelly device failed: {str(e)}",
-                details={"host": self.shelly_host, "method": method, "error": str(e)}
-            )
-        except ShellyRPCError:
-            # Re-raise our custom exceptions
-            raise
-        except Exception as e:
-            # Log exception if debug mode is enabled
-            if self.debug and log_data and log_filename:
-                log_data["exception"] = str(e)
-                with open(log_filename, "w") as f:
-                    json.dump(log_data, f, indent=2)
-            raise ShellyConnectionError(
-                f"Unexpected error communicating with Shelly: {str(e)}",
-                details={"host": self.shelly_host, "method": method, "error": str(e)}
-            )
+        """Make an RPC request to the Shelly device via ShellyClient"""
+        return self.client.rpc_call(method, params)
     
     def list_schedules(self) -> List[ScheduleJob]:
         """List all existing schedules"""
@@ -234,7 +73,7 @@ class ShellyScheduleManager:
             return []
         
         result = self._make_request("Schedule.List")
-        jobs = result.get("result", {}).get("jobs", [])
+        jobs = result.get("jobs", [])
         
         schedule_jobs = []
         for job in jobs:
@@ -267,7 +106,7 @@ class ShellyScheduleManager:
             }
             
             result = self._make_request("Schedule.Create", params)
-            schedule_id = result.get("result", {}).get("id")
+            schedule_id = result.get("id")
             
             self.logger.info(f"Created schedule with ID: {schedule_id}")
             return schedule_id
