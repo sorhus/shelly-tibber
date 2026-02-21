@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
 from src.price_analysis import PriceAnalyzer
+from src.exceptions import HTTPRequestError, TibberAPIError, JSONParseError
 
 
 class TestPriceAnalyzerInit(unittest.TestCase):
@@ -28,11 +29,18 @@ class TestPriceAnalyzerInit(unittest.TestCase):
     def test_init_stores_config(self):
         """Test analyzer stores configuration"""
         analyzer = PriceAnalyzer(self.config)
-        
+
         self.assertEqual(analyzer.token, 'test-token')
         self.assertEqual(analyzer.home_id, 'home-123')
         self.assertEqual(analyzer.num_cheapest_hours, 5)
         self.assertFalse(analyzer.debug)
+
+    def test_init_creates_tibber_client(self):
+        """Test analyzer creates TibberClient"""
+        analyzer = PriceAnalyzer(self.config)
+
+        self.assertIsNotNone(analyzer.tibber_client)
+        self.assertEqual(analyzer.tibber_client.token, 'test-token')
 
 
 class TestParseTibberResponse(unittest.TestCase):
@@ -52,122 +60,112 @@ class TestParseTibberResponse(unittest.TestCase):
         self.analyzer = PriceAnalyzer(self.config)
 
     def test_parse_valid_response(self):
-        """Test parsing valid API response"""
-        response = {
-            "data": {
-                "viewer": {
-                    "homes": [
-                        {
-                            "id": "home-123",
-                            "address": {
-                                "address1": "Test Street 1",
-                                "postalCode": "12345",
-                                "city": "Test City"
-                            },
-                            "currentSubscription": {
-                                "priceInfo": {
-                                    "tomorrow": [
-                                        {"startsAt": "2024-01-15T00:00:00Z", "total": 0.5, "energy": 0.3},
-                                        {"startsAt": "2024-01-15T01:00:00Z", "total": 0.4, "energy": 0.2},
-                                    ]
-                                }
+        """Test parsing valid API response (data portion from TibberClient)"""
+        data = {
+            "viewer": {
+                "homes": [
+                    {
+                        "id": "home-123",
+                        "address": {
+                            "address1": "Test Street 1",
+                            "postalCode": "12345",
+                            "city": "Test City"
+                        },
+                        "currentSubscription": {
+                            "priceInfo": {
+                                "tomorrow": [
+                                    {"startsAt": "2024-01-15T00:00:00Z", "total": 0.5, "energy": 0.3},
+                                    {"startsAt": "2024-01-15T01:00:00Z", "total": 0.4, "energy": 0.2},
+                                ]
                             }
                         }
-                    ]
-                }
+                    }
+                ]
             }
         }
-        
-        prices = self.analyzer.parse_tibber_response(response)
-        
+
+        prices = self.analyzer.parse_tibber_response(data)
+
         self.assertEqual(len(prices), 2)
         self.assertEqual(prices[0]["total"], 0.5)
         self.assertEqual(prices[1]["total"], 0.4)
 
     def test_parse_no_homes(self):
         """Test error when no homes in response"""
-        response = {
-            "data": {
-                "viewer": {
-                    "homes": []
-                }
+        data = {
+            "viewer": {
+                "homes": []
             }
         }
-        
+
         with self.assertRaises(Exception) as context:
-            self.analyzer.parse_tibber_response(response)
-        
+            self.analyzer.parse_tibber_response(data)
+
         self.assertIn("No homes found", str(context.exception))
 
     def test_parse_wrong_home_id(self):
         """Test error when home ID doesn't match"""
-        response = {
-            "data": {
-                "viewer": {
-                    "homes": [
-                        {
-                            "id": "different-home",
-                            "address": {"address1": "Test", "postalCode": "123", "city": "City"},
-                            "currentSubscription": {"priceInfo": {"tomorrow": []}}
-                        }
-                    ]
-                }
+        data = {
+            "viewer": {
+                "homes": [
+                    {
+                        "id": "different-home",
+                        "address": {"address1": "Test", "postalCode": "123", "city": "City"},
+                        "currentSubscription": {"priceInfo": {"tomorrow": []}}
+                    }
+                ]
             }
         }
-        
+
         with self.assertRaises(Exception) as context:
-            self.analyzer.parse_tibber_response(response)
-        
+            self.analyzer.parse_tibber_response(data)
+
         self.assertIn("Could not find home", str(context.exception))
 
     def test_parse_no_tomorrow_prices(self):
         """Test error when tomorrow's prices not available"""
-        response = {
-            "data": {
-                "viewer": {
-                    "homes": [
-                        {
-                            "id": "home-123",
-                            "address": {"address1": "Test", "postalCode": "123", "city": "City"},
-                            "currentSubscription": {
-                                "priceInfo": {
-                                    "tomorrow": None
-                                }
+        data = {
+            "viewer": {
+                "homes": [
+                    {
+                        "id": "home-123",
+                        "address": {"address1": "Test", "postalCode": "123", "city": "City"},
+                        "currentSubscription": {
+                            "priceInfo": {
+                                "tomorrow": None
                             }
                         }
-                    ]
-                }
+                    }
+                ]
             }
         }
-        
+
         with self.assertRaises(Exception) as context:
-            self.analyzer.parse_tibber_response(response)
-        
+            self.analyzer.parse_tibber_response(data)
+
         self.assertIn("tomorrow", str(context.exception).lower())
 
     def test_parse_empty_tomorrow_prices(self):
         """Test error when tomorrow's prices list is empty"""
-        response = {
-            "data": {
-                "viewer": {
-                    "homes": [
-                        {
-                            "id": "home-123",
-                            "address": {"address1": "Test", "postalCode": "123", "city": "City"},
-                            "currentSubscription": {
-                                "priceInfo": {
-                                    "tomorrow": []
-                                }
+        data = {
+            "viewer": {
+                "homes": [
+                    {
+                        "id": "home-123",
+                        "address": {"address1": "Test", "postalCode": "123", "city": "City"},
+                        "currentSubscription": {
+                            "priceInfo": {
+                                "tomorrow": []
                             }
                         }
-                    ]
-                }
+                    }
+                ]
             }
         }
-        
+
         with self.assertRaises(Exception) as context:
-            self.analyzer.parse_tibber_response(response)
-        
+            self.analyzer.parse_tibber_response(data)
+
         self.assertIn("tomorrow", str(context.exception).lower())
 
 
@@ -196,13 +194,13 @@ class TestGetCheapestHours(unittest.TestCase):
             {"startsAt": "2024-01-15T03:00:00Z", "total": 0.3, "energy": 0.15},  # 2nd cheapest
             {"startsAt": "2024-01-15T04:00:00Z", "total": 0.4, "energy": 0.2},  # 3rd cheapest
         ]
-        
+
         with patch.object(self.analyzer, 'fetch_tibber_data') as mock_fetch:
             with patch.object(self.analyzer, 'parse_tibber_response', return_value=prices):
                 mock_fetch.return_value = {}
-                
+
                 cheapest = self.analyzer.get_cheapest_hours()
-        
+
         self.assertEqual(len(cheapest), 3)
         # Should be sorted by price (cheapest first in selection)
         totals = [h["total"] for h in cheapest]
@@ -234,7 +232,7 @@ class TestPriceThreshold(unittest.TestCase):
             }
         }
         analyzer = PriceAnalyzer(config)
-        
+
         prices = [
             {"startsAt": "2024-01-15T00:00:00Z", "total": 0.5, "energy": 0.3},  # Below threshold (0.3 < 0.35)
             {"startsAt": "2024-01-15T01:00:00Z", "total": 0.2, "energy": 0.1},  # Cheapest
@@ -242,16 +240,16 @@ class TestPriceThreshold(unittest.TestCase):
             {"startsAt": "2024-01-15T03:00:00Z", "total": 0.25, "energy": 0.12},  # 2nd cheapest
             {"startsAt": "2024-01-15T04:00:00Z", "total": 0.6, "energy": 0.32},  # Below threshold (0.32 < 0.35)
         ]
-        
+
         with patch.object(analyzer, 'fetch_tibber_data') as mock_fetch:
             with patch.object(analyzer, 'parse_tibber_response', return_value=prices):
                 with patch('src.price_analysis.datetime') as mock_datetime:
                     mock_datetime.now.return_value.month = 1  # January
                     mock_datetime.fromisoformat = datetime.fromisoformat
                     mock_fetch.return_value = {}
-                    
+
                     cheapest = analyzer.get_cheapest_hours()
-        
+
         # Should have 2 cheapest + additional hours below threshold
         # 0.1, 0.12 are cheapest 2
         # 0.3 and 0.32 are below threshold 0.35
@@ -259,7 +257,7 @@ class TestPriceThreshold(unittest.TestCase):
 
 
 class TestFetchTibberData(unittest.TestCase):
-    """Test Tibber data fetching"""
+    """Test Tibber data fetching via TibberClient"""
 
     def setUp(self):
         self.config = {
@@ -273,76 +271,34 @@ class TestFetchTibberData(unittest.TestCase):
             }
         }
 
-    @patch('src.price_analysis.requests.post')
-    def test_fetch_successful(self, mock_post):
-        """Test successful API fetch"""
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"data": {"viewer": {"homes": []}}}
-        mock_post.return_value = mock_response
-
-        analyzer = PriceAnalyzer(self.config)
-        result = analyzer._fetch_tibber_data_internal()
-
-        self.assertIsNotNone(result)
-        mock_post.assert_called_once()
-
-    @patch('src.price_analysis.requests.post')
-    def test_fetch_http_error(self, mock_post):
-        """Test HTTP error raises HTTPRequestError"""
-        from src.exceptions import HTTPRequestError
-
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        mock_post.return_value = mock_response
-
+    def test_fetch_successful(self):
+        """Test successful API fetch via TibberClient"""
         analyzer = PriceAnalyzer(self.config)
 
-        with self.assertRaises(HTTPRequestError):
-            analyzer._fetch_tibber_data_internal()
+        mock_data = {"viewer": {"homes": []}}
+        with patch.object(analyzer.tibber_client, 'query', return_value=mock_data) as mock_query:
+            result = analyzer.fetch_tibber_data()
 
-    @patch('src.price_analysis.requests.post')
-    def test_fetch_connection_error(self, mock_post):
-        """Test connection error raises HTTPRequestError"""
-        from src.exceptions import HTTPRequestError
-        import requests
+        self.assertEqual(result, mock_data)
+        mock_query.assert_called_once()
 
-        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
-
+    def test_fetch_http_error(self):
+        """Test HTTP error from TibberClient raises HTTPRequestError"""
         analyzer = PriceAnalyzer(self.config)
 
-        with self.assertRaises(HTTPRequestError):
-            analyzer._fetch_tibber_data_internal()
+        with patch.object(analyzer.tibber_client, 'query',
+                          side_effect=HTTPRequestError("Request failed", url="https://api.tibber.com/v1-beta/gql")):
+            with self.assertRaises(HTTPRequestError):
+                analyzer.fetch_tibber_data()
 
-    @patch('src.price_analysis.requests.post')
-    def test_fetch_timeout_error(self, mock_post):
-        """Test timeout raises HTTPRequestError"""
-        from src.exceptions import HTTPRequestError
-        import requests
-
-        mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
-
+    def test_fetch_api_error(self):
+        """Test Tibber API error propagates"""
         analyzer = PriceAnalyzer(self.config)
 
-        with self.assertRaises(HTTPRequestError):
-            analyzer._fetch_tibber_data_internal()
-
-    @patch('src.price_analysis.requests.post')
-    def test_fetch_json_decode_error(self, mock_post):
-        """Test invalid JSON raises JSONParseError"""
-        from src.exceptions import JSONParseError
-        import json
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
-        mock_post.return_value = mock_response
-
-        analyzer = PriceAnalyzer(self.config)
-
-        with self.assertRaises(JSONParseError):
-            analyzer._fetch_tibber_data_internal()
+        with patch.object(analyzer.tibber_client, 'query',
+                          side_effect=TibberAPIError("API error")):
+            with self.assertRaises(TibberAPIError):
+                analyzer.fetch_tibber_data()
 
 
 class TestGetCheapestHoursWithThreshold(unittest.TestCase):
@@ -432,8 +388,6 @@ class TestGetCheapestHoursErrors(unittest.TestCase):
 
     def test_api_error_propagates(self):
         """Test that API errors propagate correctly"""
-        from src.exceptions import TibberAPIError
-
         analyzer = PriceAnalyzer(self.config)
 
         with patch.object(analyzer, 'fetch_tibber_data', side_effect=TibberAPIError("API error")):
