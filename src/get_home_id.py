@@ -3,19 +3,13 @@
 Script to get available homes from Tibber API
 """
 
-import requests
-import json
 import sys
 
 from src.config import get_config
+from src.http_client import TibberClient
 
 def get_homes(token):
     """Get available homes from Tibber API"""
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {token}'
-    }
-    
     query = """
     {
       viewer {
@@ -30,22 +24,9 @@ def get_homes(token):
       }
     }
     """
-    
-    try:
-        response = requests.post(
-            'https://api.tibber.com/v1-beta/gql',
-            headers=headers,
-            json={'query': query},
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"API request failed with code: {response.status_code}")
-            
-        return response.json()
-        
-    except Exception as e:
-        raise Exception(f"Failed to fetch homes: {str(e)}")
+
+    client = TibberClient(token=token)
+    return client.query(query)
 
 def main():
     """Main entry point"""
@@ -58,7 +39,7 @@ def main():
         
         # Get homes
         data = get_homes(token)
-        homes = data['data']['viewer']['homes']
+        homes = data['viewer']['homes']
         
         print(f"\n✅ Found {len(homes)} home(s):")
         print("=" * 50)
