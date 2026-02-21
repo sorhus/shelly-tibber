@@ -82,7 +82,7 @@ class CheapestHoursScheduler:
             logger.info(f"Already processed today ({today})")
             
             # Check if force run is enabled
-            force_run = os.getenv('FORCE_RUN', 'false').lower() == 'true'
+            force_run = os.getenv('FORCE_RUN', 'false').lower() in ('true', '1', 'yes', 'on')
             logger.info(f"FORCE_RUN environment variable: '{os.getenv('FORCE_RUN', 'false')}' -> {force_run}")
             
             if force_run:
@@ -231,16 +231,16 @@ class CheapestHoursScheduler:
             # Prepare and log the intended schedule
             schedule_plan = []
             for price_point in cheapest_hours:
-                start_time = datetime.fromisoformat(price_point['startsAt'].replace('Z', '+00:00'))
-                end_time = start_time + timedelta(hours=1)
+                price_start_time = datetime.fromisoformat(price_point['startsAt'].replace('Z', '+00:00'))
+                end_time = price_start_time + timedelta(hours=1)
                 schedule_plan.append({
-                    'on_time': start_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'on_time': price_start_time.strftime('%Y-%m-%dT%H:%M:%S'),
                     'off_time': end_time.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'on_hour': start_time.hour,
-                    'on_minute': start_time.minute,
+                    'on_hour': price_start_time.hour,
+                    'on_minute': price_start_time.minute,
                     'off_hour': end_time.hour,
                     'off_minute': end_time.minute,
-                    'weekday': start_time.strftime('%A'),
+                    'weekday': price_start_time.strftime('%A'),
                     'cron_weekday': cron_weekday
                 })
             
@@ -307,7 +307,7 @@ class CheapestHoursScheduler:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to complete scheduling process: {str(e)}")
+            logger.exception(f"Failed to complete scheduling process: {str(e)}")
             self._write_status(
                 start_time=start_time,
                 status="failure",
@@ -330,7 +330,7 @@ def main():
     args = parser.parse_args()
     
     # Also check environment variable for dry-run
-    dry_run = args.dry_run or os.getenv('DRY_RUN', 'false').lower() == 'true'
+    dry_run = args.dry_run or os.getenv('DRY_RUN', 'false').lower() in ('true', '1', 'yes', 'on')
     
     try:
         # Load configuration
