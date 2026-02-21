@@ -9,19 +9,22 @@ from datetime import datetime, timedelta, timezone
 
 from src.energy_analysis import EnergyAnalyzer, EnergyUsage, DailyEnergySummary
 from src.exceptions import TibberAPIError
+from src.models import AppConfig, TibberConfig, ShellyConfig, SchedulingConfig
+
+
+def make_config(token='test-token', home_id='home-123', debug=False):
+    return AppConfig(
+        tibber=TibberConfig(token=token, home_id=home_id, debug=debug),
+        shelly=ShellyConfig(host='192.168.1.100'),
+        scheduling=SchedulingConfig()
+    )
 
 
 class TestEnergyAnalyzerInit(unittest.TestCase):
     """Test EnergyAnalyzer initialization"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
+        self.config = make_config()
 
     @patch('src.energy_analysis.TibberClient')
     def test_init_stores_config(self, mock_client):
@@ -45,13 +48,7 @@ class TestParseConsumptionData(unittest.TestCase):
     """Test consumption data parsing"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
+        self.config = make_config()
 
     @patch('src.energy_analysis.TibberClient')
     def test_parse_valid_response(self, mock_client):
@@ -189,13 +186,7 @@ class TestMarkScheduledHours(unittest.TestCase):
     """Test marking of scheduled hours"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
+        self.config = make_config()
 
     @patch('src.energy_analysis.TibberClient')
     def test_mark_scheduled_hours(self, mock_client):
@@ -243,13 +234,7 @@ class TestCalculateDailySummaries(unittest.TestCase):
     """Test daily summary calculations"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
+        self.config = make_config()
 
     @patch('src.energy_analysis.TibberClient')
     def test_calculate_daily_summaries(self, mock_client):
@@ -311,13 +296,7 @@ class TestFetchTibberConsumption(unittest.TestCase):
     """Test Tibber consumption fetching"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
+        self.config = make_config()
 
     @patch('src.energy_analysis.TibberClient')
     def test_fetch_calls_tibber_client(self, mock_client_cls):

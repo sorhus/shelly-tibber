@@ -12,27 +12,27 @@ from datetime import datetime, timezone, timedelta
 
 from src.schedule_cheapest_hours import CheapestHoursScheduler
 from src.health_check import StatusManager
+from src.models import AppConfig, TibberConfig, ShellyConfig, SchedulingConfig
+
+
+def make_config(token='test-token', home_id='home-123', debug=False,
+                host='192.168.1.100', timeout=10,
+                num_cheapest_hours=5, clear_old_schedules=False):
+    return AppConfig(
+        tibber=TibberConfig(token=token, home_id=home_id, debug=debug),
+        shelly=ShellyConfig(host=host, timeout=timeout),
+        scheduling=SchedulingConfig(
+            num_cheapest_hours=num_cheapest_hours,
+            clear_old_schedules=clear_old_schedules
+        )
+    )
 
 
 class TestCheapestHoursSchedulerInit(unittest.TestCase):
     """Test CheapestHoursScheduler initialization"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 5,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=5)
 
     @patch('src.schedule_cheapest_hours.ShellyScheduleManager')
     @patch('src.schedule_cheapest_hours.PriceAnalyzer')
@@ -40,7 +40,7 @@ class TestCheapestHoursSchedulerInit(unittest.TestCase):
         """Test scheduler stores configuration"""
         scheduler = CheapestHoursScheduler(self.config)
 
-        self.assertEqual(scheduler.config, self.config)
+        self.assertIs(scheduler.config, self.config)
         self.assertFalse(scheduler.dry_run)
 
     @patch('src.schedule_cheapest_hours.ShellyScheduleManager')
@@ -66,21 +66,7 @@ class TestSuccessfulScheduling(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
         # Sample price data for tomorrow
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         self.sample_prices = [
@@ -155,21 +141,7 @@ class TestAlreadyRunToday(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
@@ -198,21 +170,7 @@ class TestForceRunOverride(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         self.sample_prices = [
             {"startsAt": (tomorrow.replace(hour=2, minute=0, second=0, microsecond=0)).isoformat(), "total": 0.2},
@@ -258,21 +216,7 @@ class TestNoPricesAvailable(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
@@ -324,21 +268,7 @@ class TestDryRunMode(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         self.sample_prices = [
             {"startsAt": (tomorrow.replace(hour=2, minute=0, second=0, microsecond=0)).isoformat(), "total": 0.2},
@@ -408,21 +338,7 @@ class TestMidnightHourHandling(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
         # Create prices that include midnight
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         self.midnight_prices = [
@@ -467,21 +383,7 @@ class TestClearOldSchedules(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': True
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3, clear_old_schedules=True)
         tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
         self.sample_prices = [
             {"startsAt": (tomorrow.replace(hour=2, minute=0, second=0, microsecond=0)).isoformat(), "total": 0.2},
@@ -531,7 +433,7 @@ class TestClearOldSchedules(unittest.TestCase):
     @patch('src.schedule_cheapest_hours.FileManager')
     def test_clear_old_schedules_false_does_not_delete(self, mock_file_manager_cls, mock_price_analyzer_cls, mock_shelly_cls):
         """Test that clear_old_schedules=False does not delete any schedules"""
-        self.config['scheduling']['clear_old_schedules'] = False
+        self.config.scheduling.clear_old_schedules = False
 
         mock_price_analyzer = mock_price_analyzer_cls.return_value
         mock_price_analyzer.get_cheapest_hours.return_value = self.sample_prices
@@ -599,21 +501,7 @@ class TestExceptionHandling(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'shelly': {
-                'host': '192.168.1.100',
-                'timeout': 10
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3,
-                'clear_old_schedules': False
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)

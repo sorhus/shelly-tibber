@@ -17,6 +17,7 @@ from src.exceptions import (
     JSONParseError,
 )
 from src.http_client import TibberClient
+from src.models import AppConfig
 from src.retry import RetryConfig
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,12 @@ logger = logging.getLogger(__name__)
 class PriceAnalyzer:
     """Analyzes electricity prices from Tibber API"""
     
-    def __init__(self, config: Dict[str, Any], retry_config: RetryConfig = None):
+    def __init__(self, config: AppConfig, retry_config: RetryConfig = None):
         self.config = config
-        self.token = config['tibber']['token']
-        self.home_id = config['tibber']['home_id']
-        self.num_cheapest_hours = config['scheduling']['num_cheapest_hours']
-        self.debug = config['tibber']['debug']
+        self.token = config.tibber.token
+        self.home_id = config.tibber.home_id
+        self.num_cheapest_hours = config.scheduling.num_cheapest_hours
+        self.debug = config.tibber.debug
         self.retry_config = retry_config or RetryConfig()
 
         # Create TibberClient for API calls
@@ -176,13 +177,13 @@ class PriceAnalyzer:
             logger.info(f"Selected {len(cheapest_hours)} cheapest hours")
             
             # Check if price threshold is enabled to add additional hours
-            threshold_config = self.config.get('scheduling', {}).get('price_threshold', {})
-            threshold_enabled = threshold_config.get('enabled', False)
-            
+            price_threshold = self.config.scheduling.price_threshold
+            threshold_enabled = price_threshold.enabled
+
             if threshold_enabled:
                 # Get the current month (1-12)
                 current_month = datetime.now().month
-                monthly_thresholds = threshold_config.get('monthly_thresholds', {})
+                monthly_thresholds = price_threshold.monthly_thresholds
                 threshold = monthly_thresholds.get(str(current_month))
                 
                 if threshold is not None:

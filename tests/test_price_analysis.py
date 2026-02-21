@@ -9,22 +9,27 @@ from datetime import datetime
 
 from src.price_analysis import PriceAnalyzer
 from src.exceptions import HTTPRequestError, TibberAPIError, JSONParseError
+from src.models import AppConfig, TibberConfig, ShellyConfig, SchedulingConfig, PriceThresholdConfig
+
+
+def make_config(token='test-token', home_id='home-123', debug=False,
+                num_cheapest_hours=5, host='192.168.1.100', timeout=10,
+                price_threshold=None):
+    return AppConfig(
+        tibber=TibberConfig(token=token, home_id=home_id, debug=debug),
+        shelly=ShellyConfig(host=host, timeout=timeout),
+        scheduling=SchedulingConfig(
+            num_cheapest_hours=num_cheapest_hours,
+            price_threshold=price_threshold or PriceThresholdConfig()
+        )
+    )
 
 
 class TestPriceAnalyzerInit(unittest.TestCase):
     """Test PriceAnalyzer initialization"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 5
-            }
-        }
+        self.config = make_config(num_cheapest_hours=5)
 
     def test_init_stores_config(self):
         """Test analyzer stores configuration"""
@@ -47,16 +52,7 @@ class TestParseTibberResponse(unittest.TestCase):
     """Test Tibber API response parsing"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 5
-            }
-        }
+        self.config = make_config(num_cheapest_hours=5)
         self.analyzer = PriceAnalyzer(self.config)
 
     def test_parse_valid_response(self):
@@ -173,16 +169,7 @@ class TestGetCheapestHours(unittest.TestCase):
     """Test cheapest hours selection"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 3
-            }
-        }
+        self.config = make_config(num_cheapest_hours=3)
         self.analyzer = PriceAnalyzer(self.config)
 
     def test_selects_cheapest_hours(self):
@@ -215,22 +202,13 @@ class TestPriceThreshold(unittest.TestCase):
 
     def test_threshold_adds_additional_hours(self):
         """Test that hours below threshold are added"""
-        config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 2,
-                'price_threshold': {
-                    'enabled': True,
-                    'monthly_thresholds': {
-                        '1': 0.35  # January threshold
-                    }
-                }
-            }
-        }
+        config = make_config(
+            num_cheapest_hours=2,
+            price_threshold=PriceThresholdConfig(
+                enabled=True,
+                monthly_thresholds={'1': 0.35}
+            )
+        )
         analyzer = PriceAnalyzer(config)
 
         prices = [
@@ -260,16 +238,7 @@ class TestFetchTibberData(unittest.TestCase):
     """Test Tibber data fetching via TibberClient"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 5
-            }
-        }
+        self.config = make_config(num_cheapest_hours=5)
 
     def test_fetch_successful(self):
         """Test successful API fetch via TibberClient"""
@@ -305,22 +274,13 @@ class TestGetCheapestHoursWithThreshold(unittest.TestCase):
     """Test cheapest hours with price threshold"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 2,
-                'price_threshold': {
-                    'enabled': True,
-                    'monthly_thresholds': {
-                        '1': 0.35
-                    }
-                }
-            }
-        }
+        self.config = make_config(
+            num_cheapest_hours=2,
+            price_threshold=PriceThresholdConfig(
+                enabled=True,
+                monthly_thresholds={'1': 0.35}
+            )
+        )
 
     @patch('src.price_analysis.datetime')
     def test_threshold_disabled(self, mock_datetime):
@@ -328,19 +288,10 @@ class TestGetCheapestHoursWithThreshold(unittest.TestCase):
         mock_datetime.now.return_value.month = 1
         mock_datetime.fromisoformat = datetime.fromisoformat
 
-        config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 2,
-                'price_threshold': {
-                    'enabled': False
-                }
-            }
-        }
+        config = make_config(
+            num_cheapest_hours=2,
+            price_threshold=PriceThresholdConfig(enabled=False)
+        )
 
         prices = [
             {"startsAt": "2024-01-15T00:00:00Z", "total": 0.5, "energy": 0.3},
@@ -364,16 +315,7 @@ class TestGetCheapestHoursErrors(unittest.TestCase):
     """Test error handling in get_cheapest_hours"""
 
     def setUp(self):
-        self.config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            },
-            'scheduling': {
-                'num_cheapest_hours': 5
-            }
-        }
+        self.config = make_config(num_cheapest_hours=5)
 
     def test_no_prices_raises_exception(self):
         """Test that empty prices raises exception"""
