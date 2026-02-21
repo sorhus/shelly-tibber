@@ -1,59 +1,129 @@
 # Backlog
 
-## Ticket 17: Unify HTTP Client in price_analysis.py
-
-**Priority:** Medium
-**Effort:** Low (1h)
-
-Migrate from raw `requests` to `TibberClient` (same pattern as energy_analysis.py).
-
-**Files:**
-- `src/price_analysis.py`
-
----
-
-## Ticket 18: Fix Bare Except Clause
-
-**Priority:** High
-**Effort:** Trivial (5min)
-
-Change `except:` to `except Exception:` at `price_analysis.py:111`.
-
-**Files:**
-- `src/price_analysis.py`
-
----
-
-## Ticket 19: Pin Dependency Versions
+## Ticket 36: Clean up unused imports
 
 **Priority:** Low
-**Effort:** Low (30min)
+**Effort:** Trivial (<15min)
+**Impact:** Low
 
-Update `requirements.txt` with pinned versions for reproducibility.
+Unused imports in `clear_schedules.py` (`os`, `Dict`, `Any`), `list_schedules.py` (`os`, `Dict`, `Any`), `set_example_schedule.py` (`os`, `Dict`, `Any`), `logging_config.py` (`os`).
+
+**Fix:** Remove unused imports.
 
 **Files:**
-- `requirements.txt`
+- `src/clear_schedules.py`
+- `src/list_schedules.py`
+- `src/set_example_schedule.py`
+- `src/logging_config.py`
 
 ---
 
-## Ticket 20: Unify HTTP Client in get_home_id.py
+## Ticket 37: Remove deprecated `load_config()` wrapper
 
-**Priority:** Medium
-**Effort:** Low (30min)
+**Priority:** Low
+**Effort:** Trivial (<15min)
+**Impact:** Low
 
-Migrate from raw `requests` to `TibberClient` for Tibber API calls.
+`load_config()` is marked deprecated but still imported in tests. It is just an alias for `load_config_dict()`.
+
+**Fix:** Update callers to use `load_config_dict()` and remove the function.
 
 **Files:**
-- `src/get_home_id.py`
+- `src/config.py`
+- `tests/test_config.py`
 
 ---
 
-## Ticket 21: Unify HTTP Client in shelly_schedule.py
+## Ticket 38: Modernize type annotations to Python 3.11 syntax
 
-**Priority:** Medium
-**Effort:** Medium (2h)
+**Priority:** Low
+**Effort:** Low (<1h)
+**Impact:** Low
 
-Replace custom `_make_request_internal` method with `ShellyClient` from `http_client.py`. The `ShellyClient` already provides the same RPC pattern with proper error handling and retry logic.
+Uses `from typing import List, Dict, Optional` throughout. Since the project targets Python 3.11, the built-in `list[...]`, `dict[...]`, and `X | None` syntax is preferred.
+
+**Fix:** Replace `List[X]` with `list[X]`, `Dict[K, V]` with `dict[K, V]`, `Optional[X]` with `X | None`.
 
 **Files:**
-- `src/shelly_schedule.py`
+- Multiple files across `src/`
+
+---
+
+## Ticket 39: Remove emoji from logger calls
+
+**Priority:** Low
+**Effort:** Trivial (<15min)
+**Impact:** Low
+
+Emoji in `logger.info()`/`logger.warning()` calls can cause encoding issues in log aggregation tools. Emoji is fine in `print()` statements for user-facing output.
+
+**Fix:** Remove emoji from `logger.*()` calls.
+
+**Files:**
+- `src/clear_schedules.py`
+- `src/list_schedules.py`
+- `src/set_example_schedule.py`
+- `src/energy_analysis.py`
+
+---
+
+## Ticket 40: Replace deprecated `datetime.utcnow()`
+
+**Priority:** Low
+**Effort:** Trivial (<15min)
+**Impact:** Low
+
+`datetime.utcnow()` was deprecated in Python 3.12.
+
+**Fix:** Replace with `datetime.now(timezone.utc)`.
+
+**Files:**
+- `src/logging_config.py`
+- `src/health_check.py`
+
+---
+
+## Ticket 41: Fix inconsistent `DRY_RUN` boolean parsing
+
+**Priority:** Low
+**Effort:** Trivial (<15min)
+**Impact:** Low
+
+Same issue as `FORCE_RUN` — only accepts `"true"` when other boolean env vars accept `"1"`, `"yes"`, `"on"`.
+
+**Fix:** Use consistent boolean parsing.
+
+**Files:**
+- `src/schedule_cheapest_hours.py`
+
+---
+
+## Ticket 42: Add tests for `analyze_last_7_days()` and utility scripts
+
+**Priority:** Low
+**Effort:** Medium (2-4h)
+**Impact:** Medium
+
+`analyze_last_7_days()` and `save_analysis_results()` have no tests. Utility scripts (`clear_schedules.py`, `list_schedules.py`, `set_example_schedule.py`, `get_home_id.py`) have no test coverage.
+
+**Fix:** Add tests with mocked Tibber/Shelly clients.
+
+**Files:**
+- `tests/test_energy_analysis.py`
+- New test files for utility scripts
+
+---
+
+## Ticket 43: Close HTTP sessions explicitly
+
+**Priority:** Low
+**Effort:** Trivial (<15min)
+**Impact:** Low
+
+`TibberClient` and `ShellyClient` support context manager protocol (`__enter__`/`__exit__`) but no caller uses it. Sessions are never explicitly closed.
+
+**Fix:** Use clients as context managers with `with` statements, or close them in cleanup.
+
+**Files:**
+- `src/schedule_cheapest_hours.py`
+- `src/energy_analysis.py`
