@@ -40,14 +40,9 @@ class PriceAnalyzer:
             debug=self.debug
         )
         
-    def debug_log(self, message: str):
-        """Debug logging function"""
-        if self.debug:
-            logger.debug(f"[DEBUG] {message}")
-            
     def fetch_tibber_data(self) -> Dict[str, Any]:
         """Fetch price data from Tibber API using TibberClient"""
-        self.debug_log("Starting price fetch...")
+        logger.debug("Starting price fetch...")
 
         query = """
             {
@@ -77,14 +72,13 @@ class PriceAnalyzer:
         # and handles retry, error handling, and auth internally
         data = self.tibber_client.query(query)
 
-        self.debug_log("Received response from API")
+        logger.debug("Received response from API")
 
         # Log a sample of the response for debugging
-        if self.debug:
-            try:
-                self.debug_log(f"API Response sample: {json.dumps(data, indent=2)[:1000]}...")
-            except Exception:
-                pass
+        try:
+            logger.debug(f"API Response sample: {json.dumps(data, indent=2)[:1000]}...")
+        except Exception:
+            pass
 
         return data
             
@@ -95,7 +89,7 @@ class PriceAnalyzer:
             data: The 'data' portion of the Tibber GraphQL response
                   (as returned by TibberClient.query())
         """
-        self.debug_log("Parsing API response...")
+        logger.debug("Parsing API response...")
 
         try:
             homes = data["viewer"]["homes"]
@@ -120,37 +114,37 @@ class PriceAnalyzer:
                     details={"requested_home_id": self.home_id, "available_homes": available_homes}
                 )
                 
-            self.debug_log(f"Found correct home: {expected_home['address']['address1']}, {expected_home['address']['city']}")
+            logger.debug(f"Found correct home: {expected_home['address']['address1']}, {expected_home['address']['city']}")
             
             # Get tomorrow's prices
             price_info = expected_home["currentSubscription"]["priceInfo"]
-            self.debug_log(f"Price info keys: {list(price_info.keys())}")
+            logger.debug(f"Price info keys: {list(price_info.keys())}")
             
             prices = price_info.get("tomorrow")
-            self.debug_log(f"Tomorrow prices type: {type(prices)}, value: {prices}")
+            logger.debug(f"Tomorrow prices type: {type(prices)}, value: {prices}")
             
             if prices is None:
-                self.debug_log("Tomorrow prices is None - not available yet")
+                logger.debug("Tomorrow prices is None - not available yet")
                 raise TibberDataNotAvailableError(
                     "Tomorrow's price data not available yet",
                     details={"hint": "Tibber typically publishes tomorrow's prices around 13:00 CET"}
                 )
             
             if not isinstance(prices, list):
-                self.debug_log(f"Tomorrow prices is not a list: {type(prices)}")
+                logger.debug(f"Tomorrow prices is not a list: {type(prices)}")
                 raise TibberAPIError(
                     f"Unexpected price data format: expected list, got {type(prices).__name__}",
                     details={"actual_type": type(prices).__name__}
                 )
             
             if len(prices) == 0:
-                self.debug_log("Tomorrow prices is empty list")
+                logger.debug("Tomorrow prices is empty list")
                 raise TibberDataNotAvailableError(
                     "Tomorrow's price data is empty",
                     details={"hint": "Tibber returned an empty price list"}
                 )
                 
-            self.debug_log(f"Found {len(prices)} price points")
+            logger.debug(f"Found {len(prices)} price points")
             return prices
             
         except KeyError as e:

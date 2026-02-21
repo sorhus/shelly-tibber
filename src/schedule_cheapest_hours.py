@@ -17,12 +17,8 @@ from src.shelly_schedule import ShellyScheduleManager
 from src.config import get_config
 from src.retry import RetryConfig
 from src.health_check import StatusManager, RunStatus
+from src.logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 class CheapestHoursScheduler:
@@ -328,14 +324,17 @@ def main():
         help='Run without making changes to Shelly device (fetch prices, calculate schedules, but skip device API calls)'
     )
     args = parser.parse_args()
-    
+
+    configure_logging()
+
     # Also check environment variable for dry-run
     dry_run = args.dry_run or os.getenv('DRY_RUN', 'false').lower() in ('true', '1', 'yes', 'on')
-    
+
+
     try:
         # Load configuration
         config = get_config()
-        
+
         # Set debug level if enabled
         if config['tibber']['debug']:
             logging.getLogger().setLevel(logging.DEBUG)

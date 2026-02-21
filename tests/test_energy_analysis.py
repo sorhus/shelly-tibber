@@ -341,41 +341,5 @@ class TestFetchTibberConsumption(unittest.TestCase):
         self.assertEqual(call_args[0][1]['homeId'], 'home-123')
 
 
-class TestDebugLogging(unittest.TestCase):
-    """Test debug logging functionality"""
-
-    @patch('src.energy_analysis.TibberClient')
-    def test_debug_log_when_enabled(self, mock_client):
-        """Test debug logging when debug is True"""
-        config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': True
-            }
-        }
-
-        analyzer = EnergyAnalyzer(config)
-
-        # This should not raise an error
-        analyzer.debug_log("Test message")
-
-    @patch('src.energy_analysis.TibberClient')
-    def test_debug_log_when_disabled(self, mock_client):
-        """Test debug logging when debug is False"""
-        config = {
-            'tibber': {
-                'token': 'test-token',
-                'home_id': 'home-123',
-                'debug': False
-            }
-        }
-
-        analyzer = EnergyAnalyzer(config)
-
-        # This should not raise an error
-        analyzer.debug_log("Test message")
-
-
 if __name__ == '__main__':
     unittest.main()

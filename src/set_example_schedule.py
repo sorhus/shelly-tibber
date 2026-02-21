@@ -10,20 +10,18 @@ from typing import Dict, Any
 
 from src.shelly_schedule import ShellyScheduleManager
 from src.config import get_config
+from src.logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 def main():
     """Main entry point"""
+    configure_logging()
+
     try:
         # Load configuration
         config = get_config()
-        
+
         # Set debug level if enabled
         if config['tibber']['debug']:
             logging.getLogger().setLevel(logging.DEBUG)

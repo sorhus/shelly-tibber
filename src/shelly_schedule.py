@@ -43,11 +43,6 @@ class ShellyScheduleManager:
         self.logger = logging.getLogger(__name__)
         self._dry_run_schedule_counter = 0  # For generating fake schedule IDs in dry-run mode
     
-    def debug_log(self, message: str):
-        """Debug logging function"""
-        if self.debug:
-            self.logger.debug(f"[DEBUG] {message}")
-        
     def _make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make an RPC request to the Shelly device via ShellyClient"""
         return self.client.rpc_call(method, params)
@@ -259,10 +254,10 @@ class ShellyScheduleManager:
         start_times = [t[0] for t in time_tuples]
         
         # Debug: Log sorted times to verify DST handling
-        self.debug_log("Sorted price points by UTC time:")
+        self.logger.debug("Sorted price points by UTC time:")
         for i, st in enumerate(start_times):
             utc_time = st.astimezone(timezone.utc)
-            self.debug_log(f"  {i+1}. Local: {st.isoformat()} | UTC: {utc_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+            self.logger.debug(f"  {i+1}. Local: {st.isoformat()} | UTC: {utc_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Find consecutive blocks (check if times are exactly 1 hour apart in absolute time)
         consecutive_blocks = []
@@ -276,19 +271,19 @@ class ShellyScheduleManager:
             # Compare absolute time difference (handles DST transitions)
             time_diff = abs((current_time - expected_time).total_seconds())
             
-            self.debug_log(f"Checking hour {i+1}: current={current_time.strftime('%H:%M%z')} expected={expected_time.strftime('%H:%M%z')} diff={time_diff}s")
+            self.logger.debug(f"Checking hour {i+1}: current={current_time.strftime('%H:%M%z')} expected={expected_time.strftime('%H:%M%z')} diff={time_diff}s")
             
             if time_diff < 60:  # Less than 1 minute difference means consecutive
                 # Consecutive hour, extend the block
-                self.debug_log(f"  → Consecutive! Extending block to {(current_time + timedelta(hours=1)).strftime('%H:%M%z')}")
+                self.logger.debug(f"  → Consecutive! Extending block to {(current_time + timedelta(hours=1)).strftime('%H:%M%z')}")
                 current_block_end = current_time + timedelta(hours=1)
             else:
                 # Non-consecutive, save current block and start new one
-                self.debug_log(f"  → Non-consecutive! Closing block {current_block_start.strftime('%H:%M%z')}-{current_block_end.strftime('%H:%M%z')}")
+                self.logger.debug(f"  → Non-consecutive! Closing block {current_block_start.strftime('%H:%M%z')}-{current_block_end.strftime('%H:%M%z')}")
                 consecutive_blocks.append((current_block_start, current_block_end))
                 current_block_start = current_time
                 current_block_end = current_time + timedelta(hours=1)
-                self.debug_log(f"  → Starting new block at {current_block_start.strftime('%H:%M%z')}")
+                self.logger.debug(f"  → Starting new block at {current_block_start.strftime('%H:%M%z')}")
         
         # Don't forget the last block
         consecutive_blocks.append((current_block_start, current_block_end))
