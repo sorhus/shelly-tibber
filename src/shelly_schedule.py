@@ -120,7 +120,11 @@ class ShellyScheduleManager:
     def update_schedule(self, schedule_id: int, **kwargs) -> int:
         """Update an existing schedule"""
         self.logger.info(f"Updating schedule {schedule_id}")
-        
+
+        if self.dry_run:
+            self.logger.info(f"[DRY RUN] Would update schedule {schedule_id}")
+            return 0
+
         params = {"id": schedule_id}
         params.update(kwargs)
         

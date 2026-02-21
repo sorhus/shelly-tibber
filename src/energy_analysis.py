@@ -478,7 +478,7 @@ class EnergyAnalyzer:
 def main():
     """Main entry point for energy analysis"""
     import sys
-    from config import get_config
+    from src.config import get_config
     
     # Configure logging
     logging.basicConfig(

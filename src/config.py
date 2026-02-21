@@ -178,6 +178,8 @@ def validate_config(config: Dict[str, Any], require_home_id: bool = True) -> Non
         errors.append("shelly.host: required field is missing")
     elif shelly_host in PLACEHOLDER_VALUES:
         errors.append("shelly.host: contains placeholder value - please configure")
+    elif '://' in shelly_host:
+        errors.append("shelly.host should be a hostname or IP address, not a URL (remove http:// or https://)")
     
     # Validate numeric ranges
     timeout = config.get('shelly', {}).get('timeout')
