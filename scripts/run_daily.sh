@@ -42,15 +42,38 @@ fi
 # Resolve mDNS hostname on host before Docker runs
 # Docker containers can't use the host's avahi/mDNS resolver, so we resolve
 # .local hostnames here and pass the IP via environment variable
+CACHED_IP_FILE="$PROJECT_DIR/.last_known_shelly_ip"
+
+resolve_mdns() {
+    local hostname="$1"
+    local max_attempts=5
+    local delay=2
+    for i in $(seq 1 $max_attempts); do
+        RESOLVED_IP=$(getent hosts "$hostname" 2>/dev/null | awk '{print $1}')
+        if [ -n "$RESOLVED_IP" ]; then
+            echo "$RESOLVED_IP"
+            return 0
+        fi
+        [ $i -lt $max_attempts ] && sleep $delay
+    done
+    return 1
+}
+
 SHELLY_HOST_ENV=""
 SHELLY_HOST=$(grep -o '"host"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 if [[ "$SHELLY_HOST" == *.local ]]; then
-    RESOLVED_IP=$(getent hosts "$SHELLY_HOST" 2>/dev/null | awk '{print $1}')
+    RESOLVED_IP=$(resolve_mdns "$SHELLY_HOST")
     if [ -n "$RESOLVED_IP" ]; then
         log "Resolved mDNS: $SHELLY_HOST -> $RESOLVED_IP"
+        echo "$RESOLVED_IP" > "$CACHED_IP_FILE"
         SHELLY_HOST_ENV="-e SHELLY_HOST=$RESOLVED_IP"
+    elif [ -f "$CACHED_IP_FILE" ]; then
+        CACHED_IP=$(cat "$CACHED_IP_FILE")
+        log "WARNING: mDNS failed after retries, using cached IP: $CACHED_IP"
+        SHELLY_HOST_ENV="-e SHELLY_HOST=$CACHED_IP"
     else
-        log "WARNING: Could not resolve mDNS hostname $SHELLY_HOST"
+        log "ERROR: Could not resolve $SHELLY_HOST and no cached IP available"
+        exit 1
     fi
 fi
 

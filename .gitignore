@@ -50,6 +50,7 @@ logs/
 token
 config.json
 *.log
+.last_known_shelly_ip
 
 # Docker
 .dockerignore
