@@ -4,9 +4,7 @@ Price Analysis Module
 Fetches electricity prices from Tibber API and finds the cheapest hours
 """
 
-import os
 import json
-import requests
 import logging
 from typing import Dict, List, Any
 from datetime import datetime, timezone
@@ -18,7 +16,8 @@ from src.exceptions import (
     HTTPRequestError,
     JSONParseError,
 )
-from src.retry import RetryConfig, execute_with_retry
+from src.http_client import TibberClient
+from src.retry import RetryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +31,14 @@ class PriceAnalyzer:
         self.num_cheapest_hours = config['scheduling']['num_cheapest_hours']
         self.debug = config['tibber']['debug']
         self.retry_config = retry_config or RetryConfig()
+
+        # Create TibberClient for API calls
+        self.tibber_client = TibberClient(
+            token=self.token,
+            timeout=30,
+            retry_config=self.retry_config,
+            debug=self.debug
+        )
         
     def debug_log(self, message: str):
         """Debug logging function"""
@@ -39,22 +46,10 @@ class PriceAnalyzer:
             logger.debug(f"[DEBUG] {message}")
             
     def fetch_tibber_data(self) -> Dict[str, Any]:
-        """Fetch data from Tibber API with retry logic"""
-        if self.retry_config.enabled:
-            return execute_with_retry(
-                self._fetch_tibber_data_internal,
-                self.retry_config,
-                exceptions=(HTTPRequestError,)
-            )
-        else:
-            return self._fetch_tibber_data_internal()
-    
-    def _fetch_tibber_data_internal(self) -> Dict[str, Any]:
-        """Internal method to fetch data from Tibber API"""
+        """Fetch price data from Tibber API using TibberClient"""
         self.debug_log("Starting price fetch...")
-        
-        request_data = {
-            "query": """
+
+        query = """
             {
               viewer {
                 homes {
@@ -76,65 +71,39 @@ class PriceAnalyzer:
                 }
               }
             }
-            """
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.token}"
-        }
-        
-        try:
-            response = requests.post(
-                "https://api.tibber.com/v1-beta/gql",
-                headers=headers,
-                json=request_data,
-                timeout=30
-            )
+        """
+
+        # TibberClient.query() returns the 'data' portion directly
+        # and handles retry, error handling, and auth internally
+        data = self.tibber_client.query(query)
+
+        self.debug_log("Received response from API")
+
+        # Log a sample of the response for debugging
+        if self.debug:
+            try:
+                self.debug_log(f"API Response sample: {json.dumps(data, indent=2)[:1000]}...")
+            except Exception:
+                pass
+
+        return data
             
-            if response.status_code != 200:
-                raise HTTPRequestError(
-                    f"Tibber API request failed",
-                    status_code=response.status_code,
-                    url="https://api.tibber.com/v1-beta/gql",
-                    details={"response_text": response.text[:500] if response.text else None}
-                )
-                
-            self.debug_log("Received response from API")
-            json_response = response.json()
-            
-            # Log a sample of the response for debugging
-            if self.debug:
-                try:
-                    import json as json_module
-                    self.debug_log(f"API Response sample: {json_module.dumps(json_response, indent=2)[:1000]}...")
-                except:
-                    pass
-            
-            return json_response
-            
-        except requests.exceptions.RequestException as e:
-            raise HTTPRequestError(
-                f"HTTP request to Tibber API failed: {str(e)}",
-                url="https://api.tibber.com/v1-beta/gql"
-            )
-        except json.JSONDecodeError as e:
-            raise JSONParseError(
-                f"Failed to parse Tibber API response",
-                details={"error": str(e)}
-            )
-            
-    def parse_tibber_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parse Tibber API response and extract prices"""
+    def parse_tibber_response(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Parse Tibber API response data and extract prices.
+
+        Args:
+            data: The 'data' portion of the Tibber GraphQL response
+                  (as returned by TibberClient.query())
+        """
         self.debug_log("Parsing API response...")
-        
+
         try:
-            homes = response["data"]["viewer"]["homes"]
+            homes = data["viewer"]["homes"]
             
             if not homes:
                 raise TibberAPIError(
                     "No homes found in Tibber account",
-                    details={"response": response}
+                    details={"response": data}
                 )
                 
             # Find the home with the expected ID
