@@ -14,7 +14,8 @@ from typing import Dict, List, Any
 from src.price_analysis import PriceAnalyzer
 from src.file_io import FileManager
 from src.shelly_schedule import ShellyScheduleManager
-from src.config import get_config
+from src.config import get_typed_config
+from src.models import AppConfig
 from src.retry import RetryConfig
 from src.health_check import StatusManager, RunStatus
 from src.logging_config import configure_logging
@@ -24,21 +25,19 @@ logger = logging.getLogger(__name__)
 class CheapestHoursScheduler:
     """Main orchestrator for scheduling cheapest hours"""
 
-    def __init__(self, config: Dict[str, Any], dry_run: bool = False, status_manager: StatusManager = None):
+    def __init__(self, config: AppConfig, dry_run: bool = False, status_manager: StatusManager = None):
         self.config = config
         self.dry_run = dry_run
         self.status_manager = status_manager or StatusManager()
 
-        # Get retry configuration from config or use defaults
-        retry_dict = config.get('retry', {})
-        retry_config = RetryConfig.from_dict(retry_dict) if retry_dict else RetryConfig()
+        retry_config = RetryConfig()
 
         self.price_analyzer = PriceAnalyzer(config, retry_config=retry_config)
         self.file_manager = FileManager()
         self.schedule_manager = ShellyScheduleManager(
-            shelly_host=config['shelly']['host'],
-            timeout=config['shelly']['timeout'],
-            debug=config['tibber']['debug'],
+            shelly_host=config.shelly.host,
+            timeout=config.shelly.timeout,
+            debug=config.tibber.debug,
             dry_run=dry_run,
             retry_config=retry_config
         )
@@ -204,7 +203,7 @@ class CheapestHoursScheduler:
                     logger.warning(f"Failed to check for conflicting midnight OFF: {str(e)}")
             
             # Step 4: Optionally delete old schedules
-            clear_schedules = self.config.get('scheduling', {}).get('clear_old_schedules', False)
+            clear_schedules = self.config.scheduling.clear_old_schedules
             if clear_schedules:
                 # Delete all schedules except today's (today's schedules may still need to run)
                 today_date = datetime.now()
@@ -330,16 +329,15 @@ def main():
     # Also check environment variable for dry-run
     dry_run = args.dry_run or os.getenv('DRY_RUN', 'false').lower() in ('true', '1', 'yes', 'on')
 
-
     try:
         # Load configuration
-        config = get_config()
+        config = get_typed_config()
 
         # Set debug level if enabled
-        if config['tibber']['debug']:
+        if config.tibber.debug:
             logging.getLogger().setLevel(logging.DEBUG)
             logger.debug("Debug logging enabled")
-        
+
         # Create scheduler and run
         scheduler = CheapestHoursScheduler(config, dry_run=dry_run)
         success = scheduler.run()

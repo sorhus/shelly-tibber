@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.exceptions import TibberAPIError
 from src.http_client import TibberClient
-from src.models import HourlyEnergyUsage, DailyEnergySummary
+from src.models import AppConfig, HourlyEnergyUsage, DailyEnergySummary
 from src.retry import RetryConfig
 
 logger = logging.getLogger(__name__)
@@ -23,14 +23,14 @@ EnergyUsage = HourlyEnergyUsage
 class EnergyAnalyzer:
     """Analyzes energy usage during scheduled hours"""
 
-    def __init__(self, config: Dict[str, Any], retry_config: RetryConfig = None):
+    def __init__(self, config: AppConfig, retry_config: RetryConfig = None):
         self.config = config
-        self.home_id = config['tibber']['home_id']
-        self.debug = config['tibber']['debug']
+        self.home_id = config.tibber.home_id
+        self.debug = config.tibber.debug
 
         # Create TibberClient for API calls
         self.tibber_client = TibberClient(
-            token=config['tibber']['token'],
+            token=config.tibber.token,
             timeout=30,
             retry_config=retry_config or RetryConfig(),
             debug=self.debug
@@ -451,18 +451,17 @@ class EnergyAnalyzer:
 def main():
     """Main entry point for energy analysis"""
     import sys
-    from src.config import get_config
+    from src.config import get_typed_config
     from src.logging_config import configure_logging
 
     configure_logging()
 
-
     try:
         # Load configuration
-        config = get_config()
+        config = get_typed_config()
 
         # Set debug level if enabled
-        if config['tibber']['debug']:
+        if config.tibber.debug:
             logging.getLogger().setLevel(logging.DEBUG)
             logger.debug("Debug logging enabled")
         
