@@ -196,8 +196,8 @@ class CheapestHoursScheduler:
                             if hour == "0" and minute == "0" and is_target_weekday:
                                 # Check if it's an OFF command (handle both Switch.Set and switch.set)
                                 for call in schedule.calls:
-                                    method = call.get('method', '').lower()
-                                    if method == 'switch.set' and call.get('params', {}).get('on') is False:
+                                    method = call.method.lower()
+                                    if method == 'switch.set' and call.params.get('on') is False:
                                         logger.info(f"Found conflicting OFF at 00:00 (schedule {schedule.id}, weekday {cron_weekday}, timespec={schedule.timespec}) - removing it to avoid flicker")
                                         self.schedule_manager.delete_schedule(schedule.id)
                                         removed_conflict = True

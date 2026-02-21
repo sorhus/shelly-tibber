@@ -4,6 +4,7 @@ Set a static example schedule on the Shelly device for development/demo purposes
 """
 
 import os
+import sys
 import logging
 from typing import Dict, Any
 

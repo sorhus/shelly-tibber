@@ -250,33 +250,6 @@ class ScheduleBlock:
         return (self.end - self.start).total_seconds() / 3600
 
 
-@dataclass
-class SchedulingResult:
-    """Result of a scheduling operation"""
-    date: str
-    target_weekday: int
-    target_date: str
-    cheapest_hours: List[PricePoint]
-    schedule_ids: List[int]
-    consecutive_blocks: List[ScheduleBlock]
-    created_at: datetime = field(default_factory=datetime.now)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dict for JSON serialization"""
-        return {
-            "date": self.date,
-            "target_weekday": self.target_weekday,
-            "target_date": self.target_date,
-            "cheapest_hours": [p.to_dict() for p in self.cheapest_hours],
-            "schedule_ids": self.schedule_ids,
-            "consecutive_blocks": [
-                (block.start.isoformat(), block.end.isoformat())
-                for block in self.consecutive_blocks
-            ],
-            "created_at": self.created_at.isoformat()
-        }
-
-
 # =============================================================================
 # Energy Analysis Types
 # =============================================================================

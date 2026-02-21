@@ -4,6 +4,7 @@ Script to list all schedules on Shelly device
 """
 
 import os
+import sys
 import logging
 from typing import Dict, Any
 

@@ -171,7 +171,7 @@ class PriceAnalyzer:
             prices = self.parse_tibber_response(response)
             
             if not prices:
-                raise Exception("No price data available")
+                raise TibberDataNotAvailableError("No price data available")
             
             logger.info(f"Found {len(prices)} hours available")
             
