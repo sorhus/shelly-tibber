@@ -9,35 +9,16 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass
 
 from src.exceptions import TibberAPIError
 from src.http_client import TibberClient
+from src.models import HourlyEnergyUsage, DailyEnergySummary
 from src.retry import RetryConfig
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class EnergyUsage:
-    """Represents energy usage data for a specific time period"""
-    date: str
-    hour: int
-    consumption: float  # kWh
-    cost: float  # SEK
-    price: float  # SEK/kWh
-    was_scheduled: bool
-
-@dataclass
-class DailyEnergySummary:
-    """Summary of energy usage for a single day"""
-    date: str
-    total_consumption: float  # kWh
-    total_cost: float  # SEK
-    scheduled_consumption: float  # kWh during scheduled hours
-    scheduled_cost: float  # SEK during scheduled hours
-    scheduled_hours: int  # Number of scheduled hours
-    total_hours: int  # Total hours in day
-    efficiency_ratio: float  # scheduled_consumption / total_consumption
+# Backward-compatible alias
+EnergyUsage = HourlyEnergyUsage
 
 class EnergyAnalyzer:
     """Analyzes energy usage during scheduled hours"""
@@ -338,8 +319,6 @@ class EnergyAnalyzer:
             scheduled_cost = sum(u.cost for u in scheduled_usages)
             scheduled_hours = len(scheduled_usages)
             
-            efficiency_ratio = scheduled_consumption / total_consumption if total_consumption > 0 else 0
-            
             summary = DailyEnergySummary(
                 date=date,
                 total_consumption=total_consumption,
@@ -348,7 +327,6 @@ class EnergyAnalyzer:
                 scheduled_cost=scheduled_cost,
                 scheduled_hours=scheduled_hours,
                 total_hours=len(usages),
-                efficiency_ratio=efficiency_ratio
             )
             summaries.append(summary)
         

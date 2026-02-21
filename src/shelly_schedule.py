@@ -6,7 +6,6 @@ Handles creating, updating, and deleting schedules on Shelly devices
 
 import logging
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from src.exceptions import (
@@ -17,19 +16,8 @@ from src.exceptions import (
     ScheduleDeletionError,
 )
 from src.http_client import ShellyClient
+from src.models import ShellySchedule
 from src.retry import RetryConfig
-
-@dataclass
-class ScheduleJob:
-    """Represents a Shelly schedule job"""
-    id: Optional[int] = None
-    enable: bool = True
-    timespec: str = ""
-    calls: List[Dict[str, Any]] = None
-
-    def __post_init__(self):
-        if self.calls is None:
-            self.calls = []
 
 class ShellyScheduleManager:
     """Manages schedules on Shelly devices"""
@@ -64,28 +52,19 @@ class ShellyScheduleManager:
         """Make an RPC request to the Shelly device via ShellyClient"""
         return self.client.rpc_call(method, params)
     
-    def list_schedules(self) -> List[ScheduleJob]:
+    def list_schedules(self) -> List[ShellySchedule]:
         """List all existing schedules"""
         self.logger.info("Fetching existing schedules...")
-        
+
         if self.dry_run:
             self.logger.info("[DRY RUN] Would fetch schedules from device - returning empty list")
             return []
-        
+
         result = self._make_request("Schedule.List")
         jobs = result.get("jobs", [])
-        
-        schedule_jobs = []
-        for job in jobs:
-            schedule_jobs.append(ScheduleJob(
-                id=job.get("id"),
-                enable=job.get("enable", True),
-                timespec=job.get("timespec", ""),
-                calls=job.get("calls", [])
-            ))
-        
-        self.logger.info(f"Found {len(schedule_jobs)} existing schedules")
-        return schedule_jobs
+        schedules = [ShellySchedule.from_dict(job) for job in jobs]
+        self.logger.info(f"Found {len(schedules)} existing schedules")
+        return schedules
     
     def create_schedule(self, timespec: str, calls: List[Dict[str, Any]], enable: bool = True) -> int:
         """Create a new schedule"""

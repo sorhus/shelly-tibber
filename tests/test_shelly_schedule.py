@@ -7,7 +7,8 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
 
-from src.shelly_schedule import ShellyScheduleManager, ScheduleJob
+from src.shelly_schedule import ShellyScheduleManager
+from src.models import ShellySchedule, ShellyScheduleCall
 from src.exceptions import ShellyConnectionError
 
 
@@ -28,32 +29,32 @@ class TestShellyScheduleManagerInit(unittest.TestCase):
         self.assertIsNotNone(manager.client)
 
 
-class TestScheduleJob(unittest.TestCase):
-    """Test ScheduleJob dataclass"""
+class TestShellySchedule(unittest.TestCase):
+    """Test ShellySchedule dataclass"""
 
     def test_default_values(self):
-        """Test ScheduleJob default values"""
-        job = ScheduleJob()
-        
-        self.assertIsNone(job.id)
-        self.assertTrue(job.enable)
-        self.assertEqual(job.timespec, "")
-        self.assertEqual(job.calls, [])
+        """Test ShellySchedule default values"""
+        schedule = ShellySchedule()
+
+        self.assertIsNone(schedule.id)
+        self.assertTrue(schedule.enable)
+        self.assertEqual(schedule.timespec, "")
+        self.assertEqual(schedule.calls, [])
 
     def test_with_values(self):
-        """Test ScheduleJob with values"""
-        calls = [{"method": "Switch.Set", "params": {"on": True}}]
-        job = ScheduleJob(
+        """Test ShellySchedule with values"""
+        calls = [ShellyScheduleCall(method="Switch.Set", params={"on": True})]
+        schedule = ShellySchedule(
             id=123,
             enable=False,
             timespec="0 0 10 * * 1",
             calls=calls
         )
-        
-        self.assertEqual(job.id, 123)
-        self.assertFalse(job.enable)
-        self.assertEqual(job.timespec, "0 0 10 * * 1")
-        self.assertEqual(job.calls, calls)
+
+        self.assertEqual(schedule.id, 123)
+        self.assertFalse(schedule.enable)
+        self.assertEqual(schedule.timespec, "0 0 10 * * 1")
+        self.assertEqual(schedule.calls, calls)
 
 
 class TestCreateSwitchSchedule(unittest.TestCase):
@@ -121,9 +122,9 @@ class TestDeleteSchedulesForWeekdays(unittest.TestCase):
         """Test deleting schedules for specific weekdays"""
         # Mock existing schedules
         schedules = [
-            ScheduleJob(id=1, timespec="0 0 10 * * 1"),  # Monday
-            ScheduleJob(id=2, timespec="0 0 11 * * 2"),  # Tuesday
-            ScheduleJob(id=3, timespec="0 0 12 * * 3"),  # Wednesday
+            ShellySchedule(id=1, timespec="0 0 10 * * 1"),  # Monday
+            ShellySchedule(id=2, timespec="0 0 11 * * 2"),  # Tuesday
+            ShellySchedule(id=3, timespec="0 0 12 * * 3"),  # Wednesday
         ]
         
         with patch.object(self.manager, 'list_schedules', return_value=schedules):
@@ -136,8 +137,8 @@ class TestDeleteSchedulesForWeekdays(unittest.TestCase):
     def test_delete_schedules_no_matches(self):
         """Test deleting when no schedules match"""
         schedules = [
-            ScheduleJob(id=1, timespec="0 0 10 * * 5"),  # Friday
-            ScheduleJob(id=2, timespec="0 0 11 * * 6"),  # Saturday
+            ShellySchedule(id=1, timespec="0 0 10 * * 5"),  # Friday
+            ShellySchedule(id=2, timespec="0 0 11 * * 6"),  # Saturday
         ]
         
         with patch.object(self.manager, 'list_schedules', return_value=schedules):
