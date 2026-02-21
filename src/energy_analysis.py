@@ -36,11 +36,6 @@ class EnergyAnalyzer:
             debug=self.debug
         )
         
-    def debug_log(self, message: str):
-        """Debug logging function"""
-        if self.debug:
-            logger.debug(f"[DEBUG] {message}")
-    
     def get_last_7_days_output(self) -> List[Dict[str, Any]]:
         """Get output data from the last 7 days"""
         logger.info("Loading output data from last 7 days...")
@@ -84,7 +79,7 @@ class EnergyAnalyzer:
     
     def fetch_tibber_consumption(self, start_date: str, end_date: str) -> Dict[str, Any]:
         """Fetch consumption data from Tibber API for a date range"""
-        self.debug_log(f"Fetching consumption data from {start_date} to {end_date}")
+        logger.debug(f"Fetching consumption data from {start_date} to {end_date}")
 
         query = """
             query($homeId: ID!) {
@@ -108,14 +103,14 @@ class EnergyAnalyzer:
 
         # TibberClient.query() returns the 'data' portion directly
         data = self.tibber_client.query(query, variables)
-        self.debug_log(f"API response keys: {list(data.keys()) if data else 'None'}")
+        logger.debug(f"API response keys: {list(data.keys()) if data else 'None'}")
 
         # Wrap in expected format for parse_consumption_data
         return {"data": data}
     
     def parse_consumption_data(self, response: Dict[str, Any], start_date: str, end_date: str) -> List[EnergyUsage]:
         """Parse Tibber consumption response into EnergyUsage objects"""
-        self.debug_log("Parsing consumption data...")
+        logger.debug("Parsing consumption data...")
         
         try:
             # Check if response is None or empty
@@ -123,7 +118,7 @@ class EnergyAnalyzer:
                 raise TibberAPIError("API response is empty or None")
             
             # Log the response structure for debugging
-            self.debug_log(f"Response keys: {list(response.keys()) if response else 'None'}")
+            logger.debug(f"Response keys: {list(response.keys()) if response else 'None'}")
             
             # Check for errors in the response
             if "errors" in response:
@@ -197,7 +192,7 @@ class EnergyAnalyzer:
             start_dt = datetime.strptime(start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc).astimezone()
             end_dt = (datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)).replace(tzinfo=timezone.utc).astimezone()  # Include end date
             
-            self.debug_log(f"Filtering for date range: {start_dt} to {end_dt}")
+            logger.debug(f"Filtering for date range: {start_dt} to {end_dt}")
             
             energy_usage = []
             filtered_out = 0
@@ -208,7 +203,7 @@ class EnergyAnalyzer:
                 
                 # Debug: show some sample dates
                 if len(energy_usage) < 5:
-                    self.debug_log(f"Sample data point: {from_time_local} local (date: {from_time_local.strftime('%Y-%m-%d')})")
+                    logger.debug(f"Sample data point: {from_time_local} local (date: {from_time_local.strftime('%Y-%m-%d')})")
                 
                 # Filter by date range (using local time)
                 if from_time_local < start_dt or from_time_local >= end_dt:
@@ -228,8 +223,8 @@ class EnergyAnalyzer:
                     was_scheduled=False  # Will be set later
                 ))
             
-            self.debug_log(f"Total consumption nodes: {len(consumption_nodes)}")
-            self.debug_log(f"Filtered out: {filtered_out}")
+            logger.debug(f"Total consumption nodes: {len(consumption_nodes)}")
+            logger.debug(f"Filtered out: {filtered_out}")
             
             if filtered_out == len(consumption_nodes) and len(consumption_nodes) > 0:
                 # Show the date range of available data
@@ -239,7 +234,7 @@ class EnergyAnalyzer:
                 logger.warning(f"Available data range: {first_date} to {last_date}")
                 logger.warning("Consider using a date range that matches the available data for testing")
             
-            self.debug_log(f"Parsed {len(energy_usage)} consumption data points for period {start_date} to {end_date}")
+            logger.debug(f"Parsed {len(energy_usage)} consumption data points for period {start_date} to {end_date}")
             return energy_usage
             
         except KeyError as e:
@@ -263,7 +258,7 @@ class EnergyAnalyzer:
     
     def mark_scheduled_hours(self, energy_usage: List[EnergyUsage], output_data: List[Dict[str, Any]]) -> List[EnergyUsage]:
         """Mark which hours were scheduled based on output data"""
-        self.debug_log("Marking scheduled hours...")
+        logger.debug("Marking scheduled hours...")
         
         # Create a lookup for scheduled hours
         scheduled_hours = {}
@@ -294,13 +289,13 @@ class EnergyAnalyzer:
                 usage.was_scheduled = True
         
         scheduled_count = sum(1 for usage in energy_usage if usage.was_scheduled)
-        self.debug_log(f"Marked {scheduled_count} hours as scheduled")
+        logger.debug(f"Marked {scheduled_count} hours as scheduled")
         
         return energy_usage
     
     def calculate_daily_summaries(self, energy_usage: List[EnergyUsage]) -> List[DailyEnergySummary]:
         """Calculate daily energy usage summaries"""
-        self.debug_log("Calculating daily summaries...")
+        logger.debug("Calculating daily summaries...")
         
         # Group by date
         daily_data = {}
@@ -333,7 +328,7 @@ class EnergyAnalyzer:
         # Sort by date (newest first)
         summaries.sort(key=lambda x: x.date, reverse=True)
         
-        self.debug_log(f"Calculated summaries for {len(summaries)} days")
+        logger.debug(f"Calculated summaries for {len(summaries)} days")
         return summaries
     
     def analyze_last_7_days(self) -> Tuple[List[DailyEnergySummary], List[EnergyUsage]]:
@@ -457,17 +452,15 @@ def main():
     """Main entry point for energy analysis"""
     import sys
     from src.config import get_config
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
+    from src.logging_config import configure_logging
+
+    configure_logging()
+
+
     try:
         # Load configuration
         config = get_config()
-        
+
         # Set debug level if enabled
         if config['tibber']['debug']:
             logging.getLogger().setLevel(logging.DEBUG)

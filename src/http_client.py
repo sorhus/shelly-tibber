@@ -52,11 +52,6 @@ class BaseHTTPClient:
         self.session = requests.Session()
         self.logger = logging.getLogger(self.__class__.__name__)
     
-    def _debug_log(self, message: str) -> None:
-        """Log debug message if debug mode is enabled"""
-        if self.debug:
-            self.logger.debug(f"[DEBUG] {message}")
-    
     def _build_url(self, endpoint: str = "") -> str:
         """Build full URL from base URL and endpoint"""
         if endpoint:
@@ -87,7 +82,7 @@ class BaseHTTPClient:
             HTTPResponse with status, data, and headers
         """
         url = self._build_url(endpoint)
-        self._debug_log(f"Making {method} request to {url}")
+        self.logger.debug(f"Making {method} request to {url}")
         
         try:
             response = self.session.request(
@@ -211,7 +206,7 @@ class TibberClient(BaseHTTPClient):
             TibberAPIError: If the API returns an error
             HTTPRequestError: If the HTTP request fails
         """
-        self._debug_log(f"Executing GraphQL query")
+        self.logger.debug(f"Executing GraphQL query")
 
         json_data = {"query": graphql_query}
         if variables:
@@ -298,7 +293,7 @@ class ShellyClient(BaseHTTPClient):
         if params:
             payload["params"] = params
         
-        self._debug_log(f"RPC call: {method} with params: {params}")
+        self.logger.debug(f"RPC call: {method} with params: {params}")
         
         try:
             response = self._request_with_retry(
